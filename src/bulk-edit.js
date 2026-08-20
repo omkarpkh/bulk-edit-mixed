@@ -4,7 +4,8 @@
 // decides what is legal, or works out what would change. If a count is wrong,
 // the model is wrong — there is no second place for it to go wrong.
 
-import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, groupByTransition } from './model.js';
+import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, groupByTransition,
+         reconcile, retryScope, describeResult } from './model.js';
 
 const CSS = `
 :host { display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:#1a1a1a; }
@@ -58,12 +59,40 @@ tr.skipped .after { color:#aaa; font-weight:400; }
 .more a { color:#1a5fb4; cursor:pointer; text-decoration:none; }
 .subhead { font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:#aaa; padding:12px 0 2px; }
 .empty { color:#999; font-size:13px; padding:6px 0; }
+
+.sheet { position:fixed; inset:0; background:#0006; display:flex; align-items:center; justify-content:center; padding:24px; }
+.card { background:#fff; border:1px solid #1a1a1a; max-width:520px; width:100%; padding:20px 22px; }
+.card h3 { margin:0 0 9px; font-size:15px; }
+.card p { margin:0 0 11px; font-size:13.5px; color:#444; }
+.card .list { font-size:12.5px; color:#666; background:#f6f6f6; border:1px solid #eee; padding:8px 10px; margin-bottom:13px; max-height:120px; overflow:auto; }
+.card .acts { display:flex; gap:9px; justify-content:flex-end; }
+.card button { border:1px solid #b8b8b8; background:#fff; padding:7px 14px; cursor:pointer; }
+.card button.go { background:#8a2318; border-color:#8a2318; color:#fff; }
+.card button.go[disabled] { background:#fff; color:#bbb; border-color:#ddd; cursor:default; }
+.confirm { display:flex; gap:7px; align-items:center; font-size:13px; margin-bottom:14px; }
+.confirm input { width:150px; border:1px solid #b8b8b8; padding:5px 8px; }
+
+.progress { border:1px solid #d4d4d4; background:#fff; padding:16px; }
+.progress .track { height:6px; background:#eee; margin:10px 0 8px; }
+.progress .fill { height:6px; background:#1a1a1a; transition:width .18s linear; }
+
+.result { border:1px solid #d4d4d4; background:#fff; padding:16px; }
+.result.bad { border-color:#8a2318; }
+.result h3 { margin:0 0 6px; font-size:14px; }
+.result .acts { margin-top:13px; display:flex; gap:9px; }
+.result .acts button { border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:7px 14px; cursor:pointer; }
+.result .acts button.ghost { background:#fff; color:#1a1a1a; }
+.fails { margin-top:11px; font-size:13px; }
+.fails tr td { border-top:1px solid #f2f2f2; padding:5px 8px 5px 0; }
+.fails .why { color:#8a2318; font-size:12px; }
 `;
 
 const COLORS = ['#5b7cc4', '#d9a441', '#9aa0a6', '#6aa06a', '#a06a9a', '#c46a5b'];
 
 export class BulkEdit extends HTMLElement {
   #state = { fieldKey: null, method: null, operand: null, excluded: new Set(), open: new Set(), showAll: new Set(), query: {} };
+  #phase = { name: 'editing' };   // editing | confirming | committing | done
+  #retryOnly = null;
 
   set data({ items, fields }) { this.items = items; this.fields = fields; this.#reset(); this.#render(); }
 
@@ -73,6 +102,7 @@ export class BulkEdit extends HTMLElement {
       fieldKey: f.key, method: methodsFor(f)[0], operand: this.#defaultOperand(f, methodsFor(f)[0]),
       excluded: new Set(), open: new Set(), showAll: new Set(), query: {},
     };
+    this.#phase = { name: 'editing' };
   }
 
   get #field() { return this.fields.find(f => f.key === this.#state.fieldKey); }
@@ -125,12 +155,18 @@ export class BulkEdit extends HTMLElement {
   }
 
   #onInput(e) {
+    if (e.target.dataset.typed !== undefined) {
+      this.#phase.typed = e.target.value;
+      return this.#render({ focus: '[data-typed]' });
+    }
     if (!e.target.dataset.search) return;
     this.#state.query[e.target.dataset.search] = e.target.value;
     this.#render({ focus: `[data-search="${e.target.dataset.search}"]` });
   }
 
   #onClick(e) {
+    const act = e.target.closest?.('[data-act]');
+    if (act) return this.#act(act.dataset.act);
     const head = e.target.closest?.('.ghead'), more = e.target.closest?.('[data-showall]');
     if (more) { this.#state.showAll.add(more.dataset.showall); return this.#render(); }
     if (head) {
@@ -164,7 +200,7 @@ export class BulkEdit extends HTMLElement {
 
           ${this.#operandHTML(field, s.method, s.operand)}
 
-          <button class="apply ${destructive ? 'destructive' : ''}" ${p.counts.changing && !this.#needsValue(field, s) ? '' : 'disabled'}>
+          <button class="apply ${destructive ? 'destructive' : ''}" data-act="apply" ${p.counts.changing && !this.#needsValue(field, s) ? '' : 'disabled'}>
             Apply to ${p.counts.changing} host${p.counts.changing === 1 ? '' : 's'}
           </button>
         </div>
@@ -172,6 +208,8 @@ export class BulkEdit extends HTMLElement {
         ${destructive && p.counts.changing ? `<div class="warn">${METHOD_LABEL[s.method]} discards values that are not shown anywhere else.</div>` : ''}
         <div class="addop">+ Add another operation</div>
       </div>
+
+      ${this.#phaseHTML(p)}
 
       <div class="label">Transition groups</div>
       ${this.#needsValue(field, s) ? '<div class="empty">Choose a value to see what would change.</div>'
@@ -189,6 +227,87 @@ export class BulkEdit extends HTMLElement {
     if (s.method === 'clear' || field.type === 'boolean') return false;
     const v = s.operand;
     return Array.isArray(v) ? v.length === 0 : v === '' || v == null;
+  }
+
+  #act(name) {
+    const { p } = this.#compute();
+    if (name === 'apply') {
+      // clear is the one operation that leaves nothing behind, so it is the one
+      // that earns a gate. Everything else is guarded by the diff you just read.
+      if (this.#state.method === 'clear') { this.#phase = { name: 'confirming', typed: '' }; return this.#render(); }
+      return this.#commit(p);
+    }
+    if (name === 'confirm') return this.#commit(p);
+    if (name === 'cancel')  { this.#phase = { name: 'editing' }; return this.#render(); }
+    if (name === 'retry') {
+      const failed = this.#phase.result.failed.map(r => r.id);
+      this.#retryOnly = new Set(failed);
+      return this.#commit(this.#compute().p, this.#retryOnly);
+    }
+    if (name === 'done')    { this.#phase = { name: 'editing' }; this.#retryOnly = null; return this.#render(); }
+  }
+
+  async #commit(p, only = null) {
+    const scope = only ? p.changing.filter(r => only.has(r.id)) : p.changing;
+    this.#phase = { name: 'committing', done: 0, total: scope.length };
+    this.#render();
+
+    // stand-in for whatever actually owns the data; the model does not do this
+    for (let i = 0; i < scope.length; i++) {
+      await new Promise(r => setTimeout(r, Math.min(14, 900 / Math.max(scope.length, 1))));
+      this.#phase.done = i + 1;
+      if (i % 7 === 0 || i === scope.length - 1) this.#render();
+    }
+
+    const failed = this.failSimulator ? this.failSimulator(scope) : [];
+    const result = reconcile({ ...p, changing: scope, counts: { ...p.counts, changing: scope.length } }, failed);
+    this.#phase = { name: 'done', result };
+    this.#render();
+  }
+
+  #phaseHTML(p) {
+    const ph = this.#phase;
+
+    if (ph.name === 'confirming') {
+      const n = p.counts.changing;
+      const ok = ph.typed.trim().toLowerCase() === 'clear';
+      return `<div class="sheet"><div class="card">
+        <h3>Clear tags on ${n} host${n === 1 ? '' : 's'}</h3>
+        <p>This removes every tag from these hosts. The values are not recorded anywhere else, and there is nothing to restore them from.</p>
+        <div class="list">${p.changing.slice(0, 6).map(r => `${r.item.hostname} — ${fmt(r.before)}`).join('<br>')}${n > 6 ? `<br>… and ${n - 6} more` : ''}</div>
+        <div class="confirm"><label>Type <b>clear</b> to continue</label>
+          <input data-typed type="text" value="${ph.typed}" placeholder="clear"></div>
+        <div class="acts">
+          <button data-act="cancel">Cancel</button>
+          <button class="go" data-act="confirm" ${ok ? '' : 'disabled'}>Clear ${n} host${n === 1 ? '' : 's'}</button>
+        </div>
+      </div></div>`;
+    }
+
+    if (ph.name === 'committing') {
+      const pct = ph.total ? Math.round(ph.done / ph.total * 100) : 100;
+      return `<div class="progress">
+        <b>Applying to ${ph.total} host${ph.total === 1 ? '' : 's'}…</b>
+        <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+        <div style="font-size:12.5px;color:#666">${ph.done} of ${ph.total} · do not close this</div>
+      </div>`;
+    }
+
+    if (ph.name === 'done') {
+      const r = ph.result, bad = !r.complete;
+      return `<div class="result ${bad ? 'bad' : ''}">
+        <h3>${describeResult(r)}</h3>
+        ${bad ? `<p style="margin:0;font-size:13px;color:#444">The ${r.counts.succeeded} that succeeded are done and will not be touched again. A retry applies only to the ${r.counts.failed} below.</p>
+          <table class="fails">${r.failed.slice(0, 5).map(x =>
+            `<tr><td>${x.item.hostname}</td><td class="before">${fmt(x.before)} → ${fmt(x.after)}</td><td class="why">timed out</td></tr>`).join('')}
+            ${r.counts.failed > 5 ? `<tr><td colspan="3" style="color:#999">… and ${r.counts.failed - 5} more</td></tr>` : ''}</table>` : ''}
+        <div class="acts">
+          ${bad ? `<button data-act="retry">Retry ${r.counts.failed} failed</button>` : ''}
+          <button class="ghost" data-act="done">${bad ? 'Leave them' : 'Done'}</button>
+        </div>
+      </div>`;
+    }
+    return '';
   }
 
   #summaryHTML(p) {

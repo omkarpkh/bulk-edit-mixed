@@ -240,3 +240,54 @@ export function describe(planResult) {
   if (unchanged) parts.push(`${unchanged} already match`);
   return parts.join(' · ');
 }
+
+/* ---------------- what actually happened ---------------- */
+
+/**
+ * A commit is the one place this model does not go: it is asynchronous, it has
+ * side effects, and it belongs to whatever system owns the data. What the model
+ * DOES own is the reporting — because "9 of 12 succeeded" is the last place a
+ * bulk edit gets to lie, and it usually does.
+ *
+ * Give it the plan and the ids that failed. It returns what happened, without
+ * ever conflating attempted with succeeded.
+ */
+export function reconcile(planResult, failedIds = []) {
+  const failed = failedIds instanceof Set ? failedIds : new Set(failedIds);
+  const attempted = planResult.changing;                    // excluded rows were never attempted
+  const succeeded = attempted.filter(r => !failed.has(r.id));
+  const errored   = attempted.filter(r =>  failed.has(r.id));
+
+  return {
+    attempted, succeeded, failed: errored,
+    counts: {
+      attempted: attempted.length,
+      succeeded: succeeded.length,
+      failed: errored.length,
+      excluded: planResult.counts.excluded,
+      unchanged: planResult.counts.unchanged,
+    },
+    complete: errored.length === 0,
+  };
+}
+
+/**
+ * The items a retry should target: the failures, and nothing else.
+ *
+ * Retrying the whole selection is the common implementation and it is wrong —
+ * it re-applies work that already succeeded, and on a non-idempotent operation
+ * that is a second edit, not a repeat of the first.
+ */
+export function retryScope(result) {
+  return result.failed.map(r => r.item);
+}
+
+/** Human summary of a commit. Refuses to report attempted as succeeded. */
+export function describeResult(result) {
+  const { attempted, succeeded, failed, excluded } = result.counts;
+  if (attempted === 0) return 'Nothing was applied';
+  if (failed === 0) return `${succeeded} updated`;
+  if (succeeded === 0) return `Nothing was applied — all ${failed} failed`;
+  const tail = excluded ? ` · ${excluded} were excluded` : '';
+  return `${succeeded} of ${attempted} updated · ${failed} failed${tail}`;
+}

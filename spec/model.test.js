@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarise, methodsFor, plan, describe, groupByTransition, DESTRUCTIVE } from '../src/model.js';
+import { summarise, methodsFor, plan, describe, groupByTransition, reconcile, retryScope, describeResult, DESTRUCTIVE } from '../src/model.js';
 
 const F = {
   env:  { key: 'environment', type: 'single-select', options: ['Production', 'Staging'] },
@@ -305,4 +305,59 @@ test('boolean groups read as on and off, not true and false', () => {
   const p = plan(items, F.mon, 'enable', null);
   const groups = groupByTransition(p, F.mon, 'enable', null);
   assert.deepEqual(groups.map(g => g.label), ['off → on', 'already on']);
+});
+
+/* ---------------- committing, and the last place it can lie ---------------- */
+
+test('a partial failure never reports attempted as succeeded', () => {
+  const items = mk({ environment: 'staging' }, { environment: 'staging' }, { environment: 'staging' }, { environment: 'prod' });
+  const p = plan(items, F.env, 'set', 'prod');
+  const r = reconcile(p, ['i1']);
+
+  assert.deepEqual(r.counts, { attempted: 3, succeeded: 2, failed: 1, excluded: 0, unchanged: 1 });
+  assert.equal(describeResult(r), '2 of 3 updated · 1 failed');
+  assert.equal(r.complete, false);
+});
+
+test('excluded items are never attempted, so they can never fail', () => {
+  const items = mk({ environment: 'staging' }, { environment: 'staging' }, { environment: 'prod' });
+  const p = plan(items, F.env, 'set', 'prod', ['i0']);
+  const r = reconcile(p, []);
+
+  assert.equal(r.counts.attempted, 1, 'the excluded host was never in scope');
+  assert.equal(describeResult(r), '1 updated');
+  assert.ok(!r.attempted.some(x => x.id === 'i0'));
+});
+
+test('a retry targets the failures and nothing else', () => {
+  const items = mk({ environment: 'staging' }, { environment: 'staging' }, { environment: 'staging' });
+  const p = plan(items, F.env, 'set', 'prod');
+  const r = reconcile(p, ['i0', 'i2']);
+  const again = retryScope(r);
+
+  assert.deepEqual(again.map(i => i.id), ['i0', 'i2']);
+  assert.ok(!again.some(i => i.id === 'i1'),
+    're-running a success is a second edit, not a repeat of the first');
+});
+
+test('total failure reads differently from nothing to do', () => {
+  const items = mk({ environment: 'staging' }, { environment: 'staging' });
+  const allFailed = reconcile(plan(items, F.env, 'set', 'prod'), ['i0', 'i1']);
+  const nothingToDo = reconcile(plan(mk({ environment: 'prod' }), F.env, 'set', 'prod'), []);
+
+  assert.equal(describeResult(allFailed), 'Nothing was applied — all 2 failed');
+  assert.equal(describeResult(nothingToDo), 'Nothing was applied');
+});
+
+test('a retry of a retry converges', () => {
+  const items = mk({ environment: 'staging' }, { environment: 'staging' }, { environment: 'staging' });
+  const first = reconcile(plan(items, F.env, 'set', 'prod'), ['i0', 'i2']);
+
+  const second = reconcile(plan(retryScope(first), F.env, 'set', 'prod'), ['i2']);
+  assert.equal(second.counts.attempted, 2);
+  assert.equal(describeResult(second), '1 of 2 updated · 1 failed');
+
+  const third = reconcile(plan(retryScope(second), F.env, 'set', 'prod'), []);
+  assert.equal(describeResult(third), '1 updated');
+  assert.equal(third.complete, true);
 });

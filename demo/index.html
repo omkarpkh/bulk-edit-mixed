@@ -63,6 +63,8 @@ function makeHosts(n) {
 }
 
 const el = document.querySelector('bulk-edit');
+// stand-in for a flaky backend: deterministic, so the same click fails the same way
+el.failSimulator = scope => scope.filter((_, i) => i % 9 === 4).map(r => r.id);
 const label = document.querySelector('.count');
 function load(n) {
   const items = makeHosts(n);
