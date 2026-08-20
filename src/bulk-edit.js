@@ -76,6 +76,10 @@ tr.skipped .after { color:#aaa; font-weight:400; }
 .strip .go-edit { margin-left:auto; }
 .strip-note { padding:0 14px 10px 32px; font-size:12.5px; color:#777; }
 .strip-note .drift { color:#8a5a18; }
+.strip-fix { padding:0 14px 11px 32px; font-size:12.5px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.strip-fix a { color:#1a5fb4; cursor:pointer; text-decoration:none; }
+.strip-fix a:hover { text-decoration:underline; }
+.strip-fix .sep { color:#ccc; }
 .go-edit { border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:7px 14px; cursor:pointer; }
 .go-edit[disabled] { background:#fff; color:#aaa; border-color:#ddd; cursor:default; }
 .pick .rows { max-height:380px; overflow:auto; }
@@ -259,6 +263,17 @@ export class BulkEdit extends HTMLElement {
   }
 
   #onClick(e) {
+    const fix = e.target.closest?.('[data-fix]');
+    if (fix) {
+      const k = fix.dataset.fix;
+      if (k === 'refilter') { const ids = this.matching.map(i => i.id); this.selection = new Set(ids); this.scope = { mode:'matching', ids:new Set(ids), filter:this.filter, count:ids.length }; }
+      if (k === 'keep')     { this.scope = { mode:'matching', ids:new Set(this.selection), filter:this.filter, count:this.selection.size }; }
+      if (k === 'restore')  { this.selection = new Set(this.scope.ids); }
+      if (k === 'page')     { const ids = this.page.map(i => i.id); this.selection = new Set(ids); this.scope = { mode:'page', ids:new Set(ids), filter:this.filter, count:ids.length }; }
+      if (k === 'clear')    { this.selection = new Set(); this.scope = null; }
+      this.#state.seededFor = null;
+      return this.#render();
+    }
     const only = e.target.closest?.('[data-only]');
     if (only) { this.onlySelected = !this.onlySelected; return this.#render(); }
     const chip = e.target.closest?.('[data-filter]');
@@ -369,6 +384,14 @@ export class BulkEdit extends HTMLElement {
           ${rows.length > BulkEdit.PAGE ? `<tr><td colspan="6" class="pad" style="color:#999">… ${(rows.length - BulkEdit.PAGE).toLocaleString()} more rows match this filter</td></tr>` : ''}
         </table></div>
       </div>`;
+
+    // indeterminate is a property, not an attribute — it cannot be set in markup.
+    // A partially selected page is its own state and must not read as "none".
+    const head = this.shadowRoot.querySelector('[data-pageall]');
+    if (head) {
+      const on = this.page.filter(i => this.selection.has(i.id)).length;
+      head.indeterminate = on > 0 && on < this.page.length;
+    }
   }
 
   #stripHTML() {
@@ -403,7 +426,25 @@ export class BulkEdit extends HTMLElement {
         <button class="go-edit" data-act="edit">Bulk edit ${r.total.toLocaleString()} host${r.total === 1 ? '' : 's'} →</button>
       </div>
       ${notes.length ? `<div class="strip-note">${notes.join(' · ')}</div>` : ''}
+      ${this.#fixesHTML(r)}
     </div>`;
+  }
+
+  // Reporting drift is not the same as resolving it. Each of these is a one-click
+  // answer to the state the operator is actually in.
+  #fixesHTML(r) {
+    const fixes = [];
+    if (r.notMatching > 0) {
+      const now = this.matching.length;
+      fixes.push(`<a data-fix="refilter">Reselect from current filter (${now.toLocaleString()})</a>`);
+      fixes.push(`<a data-fix="keep">Keep this selection (${r.total.toLocaleString()})</a>`);
+    }
+    if (r.removed > 0 && r.mode === 'matching' && r.notMatching === 0) {
+      fixes.push(`<a data-fix="restore">Reselect all ${this.scope.count.toLocaleString()}</a>`);
+      fixes.push(`<a data-fix="page">Reduce to this page (${this.page.length.toLocaleString()})</a>`);
+    }
+    if (!fixes.length) return '';
+    return `<div class="strip-fix">${fixes.join('<span class="sep">|</span>')}<span class="sep">|</span><a data-fix="clear">Clear selection</a></div>`;
   }
 
   #act(name) {
