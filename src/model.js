@@ -155,6 +155,8 @@ export function plan(items, field, method, operand, excluded = []) {
  */
 export function groupByTransition(planResult, field, method, operand) {
   const relative = field.type === 'number' && method !== 'set';
+  // a bare number is ambiguous next to a count — "90 53" reads as one value
+  const u = field.unit ? v => `${v}${field.unit}` : v => v;
   const lo = field.min ?? -Infinity, hi = field.max ?? Infinity;
 
   // Multi-value fields have the same unbounded-cardinality problem as relative
@@ -173,14 +175,14 @@ export function groupByTransition(planResult, field, method, operand) {
                     :                       'already matches';
         return { key: '__none__', label, kind: 'unchanged' };
       }
-      return { key: '__none__', label: `already ${fmt(row.before)}`, kind: 'unchanged' };
+      return { key: '__none__', label: `already ${u(fmt(row.before))}`, kind: 'unchanged' };
     }
 
     if (relative) {
       const clamped = row.after === lo || row.after === hi;
       return clamped
-        ? { key: '__clamped__', label: `clamped at ${fmt(row.after)}`, kind: 'clamped' }
-        : { key: '__moved__', label: `${METHOD_LABEL[method]} ${fmt(Math.abs(row.after - row.before))}`, kind: 'transition' };
+        ? { key: '__clamped__', label: `clamped at ${u(fmt(row.after))}`, kind: 'clamped' }
+        : { key: '__moved__', label: `${METHOD_LABEL[method]} ${u(fmt(Math.abs(row.after - row.before)))}`, kind: 'transition' };
     }
 
     if (setwise) {
@@ -195,7 +197,7 @@ export function groupByTransition(planResult, field, method, operand) {
       return { key: `${verb}:${touched.join('|')}`, label: `${verb} ${fmt(touched)}`, kind: 'transition' };
     }
 
-    return { key: `${fmt(row.before)}→${fmt(row.after)}`, label: `${fmt(row.before)} → ${fmt(row.after)}`, kind: 'transition' };
+    return { key: `${fmt(row.before)}→${fmt(row.after)}`, label: `${u(fmt(row.before))} → ${u(fmt(row.after))}`, kind: 'transition' };
   };
 
   const map = new Map();

@@ -5,7 +5,7 @@
 // the model is wrong — there is no second place for it to go wrong.
 
 import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, groupByTransition,
-         reconcile, retryScope, describeResult } from './model.js';
+         reconcile, retryScope, describeResult } from './model.js?v=1787247806';
 
 const CSS = `
 :host { display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:#1a1a1a; }
@@ -17,11 +17,11 @@ button, input, select { font:inherit; color:inherit; }
 select, input[type=text] { border:1px solid #b8b8b8; background:#fff; padding:6px 9px; min-width:130px; }
 .arrow { color:#999; }
 
-.dist { display:flex; flex-direction:column; gap:4px; width:270px; height:58px; flex:0 0 auto; }
+.dist { display:flex; flex-direction:column; gap:4px; width:270px; height:72px; flex:0 0 auto; }
 .dist .track { display:flex; width:100%; height:9px; border:1px solid #c8c8c8; overflow:hidden; }
 .dist .seg { min-width:3px; }
 .dist .seg.rest { background:repeating-linear-gradient(45deg,#f0f0f0,#f0f0f0 3px,#e6e6e6 3px,#e6e6e6 6px); min-width:0; }
-.dist .keys { display:flex; gap:9px; flex-wrap:wrap; font-size:11px; line-height:1.35; color:#666; flex:1; overflow:hidden; }
+.dist .keys { display:flex; gap:4px 10px; flex-wrap:wrap; align-content:flex-start; font-size:11px; line-height:1.4; color:#666; flex:1; overflow:hidden; }
 .dist .keys b { color:#1a1a1a; font-weight:600; }
 .dist .keys i { font-style:normal; display:inline-block; width:7px; height:7px; margin-right:4px; border:1px solid #0003; }
 .dist .cap { font-size:11px; color:#777; }
@@ -644,12 +644,14 @@ export class BulkEdit extends HTMLElement {
       : vals;
 
     const colour = (v, i) => v.other ? '#c8c8c8' : COLORS[i % COLORS.length];
+    const lbl = v => v.other || !field.unit ? fmt(v.value) : `${fmt(v.value)}${field.unit}`;
     return `<div class="dist">
       <div class="cap">Currently</div>
       <div class="track">${shown.map((v, i) =>
         `<span class="seg" style="flex:${v.count};background:${colour(v, i)}" title="${fmt(v.value)} ${v.count}"></span>`).join('')}</div>
       <div class="keys">${shown.map((v, i) =>
-        `<span><i style="background:${colour(v, i)}"></i>${fmt(v.value)} ${v.count.toLocaleString()} (${Math.round(v.count / total * 100)}%)</span>`).join('')}</div>
+        `<span title="${lbl(v)} — ${v.count.toLocaleString()} of ${total.toLocaleString()} (${Math.round(v.count / total * 100)}%)"
+          ><i style="background:${colour(v, i)}"></i>${lbl(v)} <b>${v.count.toLocaleString()}</b></span>`).join('')}</div>
     </div>`;
   }
 
