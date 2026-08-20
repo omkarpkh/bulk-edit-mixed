@@ -68,7 +68,9 @@ el.failSimulator = scope => scope.filter((_, i) => i % 9 === 4).map(r => r.id);
 const label = document.querySelector('.count');
 function load(n) {
   const items = makeHosts(n);
-  el.data = { items, fields: FIELDS };
+  // arrive with a selection already made, the way an operator would
+  const selected = items.filter(h => h.environment !== 'prod').map(h => h.id);
+  el.data = { items, fields: FIELDS, selected };
   label.textContent = `${n} selected · ${new Set(items.map(h => h.environment)).size} environments`;
   document.querySelectorAll('.switch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.n === String(n)));
 }

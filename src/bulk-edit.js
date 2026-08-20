@@ -60,6 +60,24 @@ tr.skipped .after { color:#aaa; font-weight:400; }
 .subhead { font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:#aaa; padding:12px 0 2px; }
 .empty { color:#999; font-size:13px; padding:6px 0; }
 
+.pick { border:1px solid #d4d4d4; background:#fff; }
+.pick .top { display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:12px 14px; border-bottom:1px solid #ececec; }
+.chip { font-size:12.5px; border:1px solid #c8c8c8; background:#fff; padding:4px 11px; cursor:pointer; }
+.chip[aria-pressed=true] { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+.pick .scope { margin-left:auto; font-size:13px; color:#444; display:flex; align-items:center; gap:12px; }
+.pick .scope b { color:#1a1a1a; }
+.go-edit { border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:7px 14px; cursor:pointer; }
+.go-edit[disabled] { background:#fff; color:#aaa; border-color:#ddd; cursor:default; }
+.pick .rows { max-height:380px; overflow:auto; }
+.pick table { width:100%; }
+.pick th { position:sticky; top:0; background:#fff; box-shadow:0 1px 0 #ececec; padding:8px 10px 7px 0; }
+.pick td { padding:6px 10px 6px 0; }
+.pick tr.on td { background:#f7f9fd; }
+.pick .pad { padding-left:14px; }
+.slot { border:1px dashed #c0c0c0; background:#fafafa; color:#888; font-size:12.5px; padding:8px 11px; margin:10px 14px 12px; }
+.backlink { font-size:12.5px; color:#666; margin-bottom:10px; }
+.backlink a { color:#1a5fb4; cursor:pointer; text-decoration:none; }
+
 .sheet { position:fixed; inset:0; background:#0006; display:flex; align-items:center; justify-content:center; padding:24px; }
 .card { background:#fff; border:1px solid #1a1a1a; max-width:520px; width:100%; padding:20px 22px; }
 .card h3 { margin:0 0 9px; font-size:15px; }
@@ -91,10 +109,22 @@ const COLORS = ['#5b7cc4', '#d9a441', '#9aa0a6', '#6aa06a', '#a06a9a', '#c46a5b'
 
 export class BulkEdit extends HTMLElement {
   #state = { fieldKey: null, method: null, operand: null, excluded: new Set(), open: new Set(), showAll: new Set(), query: {} };
-  #phase = { name: 'editing' };   // editing | confirming | committing | done
+  #phase = { name: 'browsing' };  // browsing | editing | confirming | committing | done
   #retryOnly = null;
 
-  set data({ items, fields }) { this.items = items; this.fields = fields; this.#reset(); this.#render(); }
+  // `items` is everything available; the selection is what an operation acts on.
+  // Conflating the two is how "select all" quietly becomes an incident.
+  set data({ items, fields, selected }) {
+    this.all = items;
+    this.fields = fields;
+    this.selection = new Set(selected ?? items.map(i => i.id));
+    this.filter = null;
+    this.#reset();
+    this.#render();
+  }
+
+  get items() { return this.all.filter(i => this.selection.has(i.id)); }
+  get visible() { return this.filter ? this.all.filter(i => i.environment === this.filter) : this.all; }
 
   #reset() {
     const f = this.fields[0];
@@ -102,7 +132,7 @@ export class BulkEdit extends HTMLElement {
       fieldKey: f.key, method: methodsFor(f)[0], operand: this.#defaultOperand(f, methodsFor(f)[0]),
       excluded: new Set(), open: new Set(), showAll: new Set(), query: {}, seededFor: null,
     };
-    this.#phase = { name: 'editing' };
+    this.#phase = { name: 'browsing' };
   }
 
   get #field() { return this.fields.find(f => f.key === this.#state.fieldKey); }
@@ -165,6 +195,8 @@ export class BulkEdit extends HTMLElement {
   }
 
   #onClick(e) {
+    const chip = e.target.closest?.('[data-filter]');
+    if (chip) { this.filter = chip.dataset.filter || null; return this.#render(); }
     const act = e.target.closest?.('[data-act]');
     if (act) return this.#act(act.dataset.act);
     const head = e.target.closest?.('.ghead'), more = e.target.closest?.('[data-showall]');
@@ -177,6 +209,7 @@ export class BulkEdit extends HTMLElement {
   }
 
   #render(opts = {}) {
+    if (this.#phase.name === 'browsing') return this.#renderPicker(opts);
     const { field, p, groups, current } = this.#compute();
     const s = this.#state;
     const methods = methodsFor(field);
@@ -194,6 +227,7 @@ export class BulkEdit extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>${CSS}</style>
+      <div class="backlink"><a data-act="reselect">← Change selection</a> · ${this.selection.size} of ${this.all.length} hosts</div>
       <div class="bar">
         <div class="row">
           <select id="field">${this.fields.map(f =>
@@ -236,7 +270,48 @@ export class BulkEdit extends HTMLElement {
     return Array.isArray(v) ? v.length === 0 : v === '' || v == null;
   }
 
+  #renderPicker(opts = {}) {
+    const rows = this.visible;
+    const chosen = rows.filter(i => this.selection.has(i.id)).length;
+    const total = this.selection.size;
+    const offscreen = total - chosen;
+
+    this.shadowRoot.innerHTML = `
+      <style>${CSS}</style>
+      <div class="pick">
+        <div class="top">
+          ${['prod', 'staging', 'dev'].map(v =>
+            `<button class="chip" data-filter="${v}" aria-pressed="${this.filter === v}">${v}</button>`).join('')}
+          ${this.filter ? `<button class="chip" data-filter="">clear filter</button>` : ''}
+          <span class="scope">
+            <span><b>${total}</b> selected${offscreen > 0 ? ` · ${offscreen} not shown by this filter` : ''}</span>
+            <button class="go-edit" data-act="edit" ${total ? '' : 'disabled'}>Bulk edit ${total} host${total === 1 ? '' : 's'}</button>
+          </span>
+        </div>
+
+        <!-- the select-all treatment drops in here once it is chosen -->
+        <div class="slot">Selection scope · treatment pending. Row checkboxes work; the header checkbox and its
+          &ldquo;select all ${this.all.length} matching&rdquo; escalation are the piece still being designed.</div>
+
+        <div class="rows"><table>
+          <tr><th class="pad"></th><th>Host</th><th>Environment</th><th>Tags</th><th>Monitoring</th><th>Retention</th></tr>
+          ${rows.slice(0, 60).map(i => {
+            const on = this.selection.has(i.id);
+            return `<tr class="${on ? 'on' : ''}">
+              <td class="pad"><input type="checkbox" data-pick="${i.id}" ${on ? 'checked' : ''}></td>
+              <td>${i.hostname}</td><td>${i.environment}</td>
+              <td class="tag">${fmt(i.tags)}</td><td>${fmt(i.monitoring)}</td><td>${i.retentionDays}d</td>
+            </tr>`;
+          }).join('')}
+          ${rows.length > 60 ? `<tr><td colspan="6" class="pad" style="color:#999">… ${rows.length - 60} more rows</td></tr>` : ''}
+        </table></div>
+      </div>`;
+  }
+
   #act(name) {
+    if (name === 'edit')   { this.#phase = { name: 'editing' }; this.#state.seededFor = null; return this.#render(); }
+    if (name === 'reselect') { this.#phase = { name: 'browsing' }; return this.#render(); }
+
     const { p } = this.#compute();
     if (name === 'apply') {
       // clear is the one operation that leaves nothing behind, so it is the one
