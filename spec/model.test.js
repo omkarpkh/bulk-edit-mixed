@@ -200,7 +200,7 @@ test('grouping collapses a large selection to a handful of transitions', () => {
     environment: i < 120 ? 'staging' : i < 195 ? 'dev' : 'prod',
   }));
   const p = plan(hosts, F.env, 'set', 'prod', ['h0', 'h1', 'h2']);
-  const groups = groupByTransition(p, F.env, 'set');
+  const groups = groupByTransition(p, F.env, 'set', 'prod');
 
   assert.equal(groups.length, 3, 'bounded by the field value space, not the selection size');
   assert.deepEqual(groups.map(g => [g.label, g.total, g.changing, g.excluded]), [
@@ -217,7 +217,7 @@ test('group counts sum to the plan counts — the wireframe bug, caught', () => 
     environment: i < 120 ? 'staging' : i < 195 ? 'dev' : 'prod',
   }));
   const p = plan(hosts, F.env, 'set', 'prod', ['h0', 'h1', 'h2']);
-  const groups = groupByTransition(p, F.env, 'set');
+  const groups = groupByTransition(p, F.env, 'set', 'prod');
 
   const sum = k => groups.reduce((n, g) => n + g[k], 0);
   assert.equal(sum('total'), p.counts.total);
@@ -233,7 +233,7 @@ test('relative numeric ops group by outcome class, not by value', () => {
     { id: 'd', retentionDays: 1 },    // already at floor, no change
   ];
   const p = plan(hosts, F.ret, 'decreaseBy', 14);
-  const groups = groupByTransition(p, F.ret, 'decreaseBy');
+  const groups = groupByTransition(p, F.ret, 'decreaseBy', 14);
 
   // grouping by before→after would give four groups for four hosts — useless at scale
   assert.equal(groups.length, 3);
@@ -252,4 +252,50 @@ test('an empty exclusion set behaves exactly as before', () => {
   const without = plan(hosts, F.env, 'set', 'prod');
   assert.deepEqual(withArg.counts, without.counts);
   assert.equal(describe(without), '1 will change · 1 already match');
+});
+
+/* ---------------- edges the first pass missed ---------------- */
+
+test('multi-value grouping is bounded by the operand, not the selection', () => {
+  // every item holds its own set, so before→after would give one group per item —
+  // the exact failure grouping exists to prevent
+  const items = mk({ tags: ['pci', 'db'] }, { tags: ['db'] }, { tags: [] }, { tags: ['pci', 'db', 'gpu'] });
+  const p = plan(items, F.tags, 'add', ['gpu']);
+  const groups = groupByTransition(p, F.tags, 'add', ['gpu']);
+
+  assert.equal(groups.length, 2, 'gains it, or already has it');
+  assert.deepEqual(groups.map(g => [g.label, g.total]), [
+    ['gains gpu', 3],
+    ['already has gpu', 1],
+  ]);
+});
+
+test('remove and clear group by what the operation did', () => {
+  const items = mk({ tags: ['pci', 'db'] }, { tags: ['db'] }, { tags: [] });
+  const rm = groupByTransition(plan(items, F.tags, 'remove', ['db']), F.tags, 'remove', ['db']);
+  assert.deepEqual(rm.map(g => [g.label, g.total]), [['loses db', 2], ['does not have db', 1]]);
+
+  const cl = groupByTransition(plan(items, F.tags, 'clear', null), F.tags, 'clear', null);
+  assert.deepEqual(cl.map(g => [g.label, g.total]), [['cleared', 2], ['already empty', 1]]);
+});
+
+test('an empty selection says so instead of claiming everything matches', () => {
+  const p = plan([], F.ret, 'increaseBy', 10);
+  assert.deepEqual(p.counts, { total: 0, changing: 0, excluded: 0, unchanged: 0 });
+  assert.equal(describe(p), 'Nothing selected');
+});
+
+test('excluding everything reads as a decision, not as a no-op', () => {
+  const p = plan(mk({ tags: [] }, { tags: [] }), F.tags, 'add', ['pci'], ['i0', 'i1']);
+  assert.equal(p.counts.changing, 0);
+  assert.equal(p.counts.excluded, 2);
+  assert.equal(describe(p), 'Nothing will change — 2 excluded',
+    'must not read as "0 will change", and must never say everything already matches');
+});
+
+test('summarise works on booleans without special-casing at the call site', () => {
+  const s = summarise(mk({ monitoring: true }, { monitoring: false }, { monitoring: true }), F.mon);
+  assert.equal(s.uniform, false);
+  assert.equal(s.value, null);
+  assert.deepEqual(s.values.map(v => [v.value, v.count]), [[true, 2], [false, 1]]);
 });

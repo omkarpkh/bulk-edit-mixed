@@ -153,18 +153,48 @@ export function plan(items, field, method, operand, excluded = []) {
  * group by OUTCOME CLASS instead — moved, clamped at a limit, or already there —
  * which is also the only way clamping stays visible at scale.
  */
-export function groupByTransition(planResult, field, method) {
+export function groupByTransition(planResult, field, method, operand) {
   const relative = field.type === 'number' && method !== 'set';
   const lo = field.min ?? -Infinity, hi = field.max ?? Infinity;
 
+  // Multi-value fields have the same unbounded-cardinality problem as relative
+  // numbers: every item holds its own set, so before→after would produce one
+  // group per item. They group by what the operation DID instead — bounded by
+  // the size of the operand, not the size of the selection.
+  const setwise = field.type === 'multi-value';
+  const ops = Array.isArray(operand) ? operand : operand == null ? [] : [operand];
+
   const keyOf = row => {
-    if (!row.wouldChange) return { key: '__none__', label: `already ${fmt(row.before)}`, kind: 'unchanged' };
+    if (!row.wouldChange) {
+      if (setwise) {
+        const label = method === 'add'    ? `already has ${fmt(ops)}`
+                    : method === 'remove' ? `does not have ${fmt(ops)}`
+                    : method === 'clear'  ? 'already empty'
+                    :                       'already matches';
+        return { key: '__none__', label, kind: 'unchanged' };
+      }
+      return { key: '__none__', label: `already ${fmt(row.before)}`, kind: 'unchanged' };
+    }
+
     if (relative) {
       const clamped = row.after === lo || row.after === hi;
       return clamped
         ? { key: '__clamped__', label: `clamped at ${fmt(row.after)}`, kind: 'clamped' }
         : { key: '__moved__', label: `${METHOD_LABEL[method]} ${fmt(Math.abs(row.after - row.before))}`, kind: 'transition' };
     }
+
+    if (setwise) {
+      if (method === 'clear')   return { key: '__cleared__', label: 'cleared', kind: 'transition' };
+      if (method === 'replace') return { key: '__replaced__', label: `replaced with ${fmt(ops)}`, kind: 'transition' };
+      // which of the operand values actually moved for this item
+      const before = new Set(row.before ?? []);
+      const touched = method === 'add'
+        ? ops.filter(v => !before.has(v))
+        : ops.filter(v =>  before.has(v));
+      const verb = method === 'add' ? 'gains' : 'loses';
+      return { key: `${verb}:${touched.join('|')}`, label: `${verb} ${fmt(touched)}`, kind: 'transition' };
+    }
+
     return { key: `${fmt(row.before)}→${fmt(row.after)}`, label: `${fmt(row.before)} → ${fmt(row.after)}`, kind: 'transition' };
   };
 
@@ -194,7 +224,12 @@ export function describe(planResult) {
   const { total, changing, excluded, unchanged } = planResult.counts;
   const parts = [];
 
+  if (total === 0) return 'Nothing selected';
   if (changing === 0 && excluded === 0) return `No change — all ${total} already match`;
+  if (changing === 0) {
+    const tail = unchanged ? ` · ${unchanged} already match` : '';
+    return `Nothing will change — ${excluded} excluded${tail}`;
+  }
 
   parts.push(`${changing} will change`);
   // Excluded and already-matching must never be reported as one number. One is a
