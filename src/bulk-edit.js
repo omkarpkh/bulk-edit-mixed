@@ -100,7 +100,7 @@ export class BulkEdit extends HTMLElement {
     const f = this.fields[0];
     this.#state = {
       fieldKey: f.key, method: methodsFor(f)[0], operand: this.#defaultOperand(f, methodsFor(f)[0]),
-      excluded: new Set(), open: new Set(), showAll: new Set(), query: {},
+      excluded: new Set(), open: new Set(), showAll: new Set(), query: {}, seededFor: null,
     };
     this.#phase = { name: 'editing' };
   }
@@ -141,7 +141,7 @@ export class BulkEdit extends HTMLElement {
     if (t.id === 'field') {
       const f = this.fields.find(x => x.key === t.value);
       s.fieldKey = f.key; s.method = methodsFor(f)[0]; s.operand = this.#defaultOperand(f, s.method);
-      s.open.clear(); s.showAll.clear(); s.query = {};
+      s.open.clear(); s.showAll.clear(); s.query = {}; s.seededFor = null;
     } else if (t.id === 'method') {
       s.method = t.value; s.operand = this.#defaultOperand(this.#field, t.value);
     } else if (t.id === 'operand') {
@@ -182,8 +182,15 @@ export class BulkEdit extends HTMLElement {
     const methods = methodsFor(field);
     const destructive = DESTRUCTIVE.has(s.method);
 
-    // groups start open when the whole selection is small enough to just read
-    const autoOpen = this.items.length <= 25;
+    // Groups start open when the selection is small enough to just read. This is
+    // seeded into the open set rather than inferred from it — inferring made the
+    // first click on any group collapse all the others, because adding one key
+    // made the set non-empty and switched the fallback off.
+    const keys = groups.map(g => g.key).join('|');
+    if (keys !== s.seededFor) {
+      s.open = this.items.length <= 25 ? new Set(groups.map(g => g.key)) : new Set();
+      s.seededFor = keys;          // groups changed, so any previous open state is stale
+    }
 
     this.shadowRoot.innerHTML = `
       <style>${CSS}</style>
@@ -213,7 +220,7 @@ export class BulkEdit extends HTMLElement {
 
       <div class="label">Transition groups</div>
       ${this.#needsValue(field, s) ? '<div class="empty">Choose a value to see what would change.</div>'
-        : groups.length ? groups.map(g => this.#groupHTML(g, field, autoOpen)).join('')
+        : groups.length ? groups.map(g => this.#groupHTML(g, field)).join('')
         : '<div class="empty">Nothing selected.</div>'}
     `;
 
@@ -345,9 +352,9 @@ export class BulkEdit extends HTMLElement {
     </select>`;
   }
 
-  #groupHTML(g, field, autoOpen) {
+  #groupHTML(g, field) {
     const s = this.#state;
-    const open = s.open.has(g.key) || (autoOpen && !s.open.size);
+    const open = s.open.has(g.key);
     const quiet = g.kind === 'unchanged';
     const q = (s.query[g.key] ?? '').toLowerCase();
 
