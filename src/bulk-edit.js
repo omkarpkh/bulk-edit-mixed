@@ -17,10 +17,12 @@ button, input, select { font:inherit; color:inherit; }
 select, input[type=text] { border:1px solid #b8b8b8; background:#fff; padding:6px 9px; min-width:130px; }
 .arrow { color:#999; }
 
-.dist { display:flex; flex-direction:column; gap:4px; min-width:210px; }
-.dist .track { display:flex; height:9px; border:1px solid #c8c8c8; overflow:hidden; }
+.dist { display:flex; flex-direction:column; gap:4px; width:270px; height:58px; flex:0 0 auto; }
+.dist .track { display:flex; width:100%; height:9px; border:1px solid #c8c8c8; overflow:hidden; }
 .dist .seg { min-width:3px; }
-.dist .keys { display:flex; gap:11px; flex-wrap:wrap; font-size:11px; color:#666; }
+.dist .seg.rest { background:repeating-linear-gradient(45deg,#f0f0f0,#f0f0f0 3px,#e6e6e6 3px,#e6e6e6 6px); min-width:0; }
+.dist .keys { display:flex; gap:9px; flex-wrap:wrap; font-size:11px; line-height:1.35; color:#666; flex:1; overflow:hidden; }
+.dist .keys b { color:#1a1a1a; font-weight:600; }
 .dist .keys i { font-style:normal; display:inline-block; width:7px; height:7px; margin-right:4px; border:1px solid #0003; }
 .dist .cap { font-size:11px; color:#777; }
 
@@ -606,17 +608,48 @@ export class BulkEdit extends HTMLElement {
   }
 
   #distHTML(current, field) {
-    const vals = field.type === 'multi-value'
-      ? (current.presence ?? []).map(x => ({ value: x.value, count: x.count }))
-      : (current.values ?? []);
-    if (!vals.length) return '';
     const total = this.items.length;
+    if (!total) return '';
+
+    // A multi-value field is not a distribution. One host can carry several tags,
+    // so the counts do not sum to the selection — stacking them implies a whole
+    // that does not exist, and they summed to 192% when they were stacked here.
+    // What matters before the operation is how many already hold the value you
+    // are about to apply.
+    if (field.type === 'multi-value') {
+      const ops = Array.isArray(this.#state.operand) ? this.#state.operand : [];
+      const v = ops[0];
+      if (v == null) return '';
+      const have = (current.presence ?? []).find(x => x.value === v)?.count ?? 0;
+      return `<div class="dist">
+        <div class="cap">Currently</div>
+        <div class="track"><span class="seg" style="flex:${have};background:${COLORS[0]}"></span
+          ><span class="seg rest" style="flex:${total - have}"></span></div>
+        <div class="keys"><span>${have.toLocaleString()} of ${total.toLocaleString()} already have
+          <b>${v}</b> (${Math.round(have / total * 100)}%)</span></div>
+      </div>`;
+    }
+
+    const vals = current.values ?? [];
+    if (!vals.length) return '';
+
+    // Cap the segments so the palette stays unambiguous and the legend stays one
+    // line. Six distinct colours cycled across ten segments made two values share
+    // a swatch, which is worse than not showing them separately at all.
+    const MAX = 5;
+    const head = vals.slice(0, MAX);
+    const tailCount = vals.slice(MAX).reduce((n, v) => n + v.count, 0);
+    const shown = vals.length > MAX
+      ? [...head, { value: `${vals.length - MAX} other${vals.length - MAX === 1 ? '' : 's'}`, count: tailCount, other: true }]
+      : vals;
+
+    const colour = (v, i) => v.other ? '#c8c8c8' : COLORS[i % COLORS.length];
     return `<div class="dist">
       <div class="cap">Currently</div>
-      <div class="track">${vals.map((v, i) =>
-        `<span class="seg" style="flex:${v.count};background:${COLORS[i % COLORS.length]}"></span>`).join('')}</div>
-      <div class="keys">${vals.map((v, i) =>
-        `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${fmt(v.value)} ${v.count} (${Math.round(v.count / total * 100)}%)</span>`).join('')}</div>
+      <div class="track">${shown.map((v, i) =>
+        `<span class="seg" style="flex:${v.count};background:${colour(v, i)}" title="${fmt(v.value)} ${v.count}"></span>`).join('')}</div>
+      <div class="keys">${shown.map((v, i) =>
+        `<span><i style="background:${colour(v, i)}"></i>${fmt(v.value)} ${v.count.toLocaleString()} (${Math.round(v.count / total * 100)}%)</span>`).join('')}</div>
     </div>`;
   }
 
