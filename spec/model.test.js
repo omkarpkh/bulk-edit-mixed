@@ -299,3 +299,10 @@ test('summarise works on booleans without special-casing at the call site', () =
   assert.equal(s.value, null);
   assert.deepEqual(s.values.map(v => [v.value, v.count]), [[true, 2], [false, 1]]);
 });
+
+test('boolean groups read as on and off, not true and false', () => {
+  const items = mk({ monitoring: false }, { monitoring: false }, { monitoring: true });
+  const p = plan(items, F.mon, 'enable', null);
+  const groups = groupByTransition(p, F.mon, 'enable', null);
+  assert.deepEqual(groups.map(g => g.label), ['off → on', 'already on']);
+});

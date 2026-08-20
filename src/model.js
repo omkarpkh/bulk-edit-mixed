@@ -217,7 +217,9 @@ export function groupByTransition(planResult, field, method, operand) {
       a.label.localeCompare(b.label));
 }
 
-const fmt = v => Array.isArray(v) ? (v.length ? v.join(', ') : 'none') : String(v);
+const fmt = v => Array.isArray(v) ? (v.length ? v.join(', ') : 'none')
+               : typeof v === 'boolean' ? (v ? 'on' : 'off')
+               : String(v);
 
 /** Human summary of a plan. Deliberately refuses to round or flatter. */
 export function describe(planResult) {
