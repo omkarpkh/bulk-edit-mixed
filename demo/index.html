@@ -22,7 +22,9 @@
 
   <div class="switch">
     <button data-n="12" aria-pressed="false">12 hosts</button>
-    <button data-n="200" aria-pressed="true">200 hosts</button>
+    <button data-n="200" aria-pressed="false">200 hosts</button>
+    <button data-n="1847" aria-pressed="true">1,847 hosts</button>
+    <button data-n="12000" aria-pressed="false">12,000 hosts</button>
     <span class="count"></span>
   </div>
 
@@ -69,13 +71,13 @@ const label = document.querySelector('.count');
 function load(n) {
   const items = makeHosts(n);
   // arrive with a selection already made, the way an operator would
-  const selected = items.filter(h => h.environment !== 'prod').map(h => h.id);
+  const selected = items.slice(0, Math.min(200, items.length)).map(h => h.id);
   el.data = { items, fields: FIELDS, selected };
-  label.textContent = `${n} selected · ${new Set(items.map(h => h.environment)).size} environments`;
+  label.textContent = `${n.toLocaleString()} hosts · ${new Set(items.map(h => h.environment)).size} environments`;
   document.querySelectorAll('.switch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.n === String(n)));
 }
 document.querySelectorAll('.switch button').forEach(b => b.onclick = () => load(Number(b.dataset.n)));
-load(200);
+load(1847);
 </script>
 </body>
 </html>

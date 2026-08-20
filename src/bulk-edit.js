@@ -65,8 +65,17 @@ tr.skipped .after { color:#aaa; font-weight:400; }
 .chip { font-size:12.5px; border:1px solid #c8c8c8; background:#fff; padding:4px 11px; cursor:pointer; }
 .chip[aria-pressed=true] { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
 .chip.sel { margin-left:6px; }
-.pick .scope { margin-left:auto; font-size:13px; color:#444; display:flex; align-items:center; gap:12px; }
-.pick .scope b { color:#1a1a1a; }
+.matchcount { margin-left:auto; font-size:12.5px; color:#777; }
+.strip { border-bottom:1px solid #ececec; background:#f7f9fd; }
+.strip-main { display:flex; align-items:center; gap:12px; padding:10px 14px; font-size:13.5px; }
+.strip-main .tick { color:#2f6b3f; }
+.strip-main b { font-weight:600; }
+.scope-ctl { display:flex; align-items:center; gap:7px; margin-left:6px; }
+.scope-lbl { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:#888; }
+.scope-ctl select { border:1px solid #b8b8b8; background:#fff; padding:5px 8px; font-size:13px; max-width:330px; }
+.strip .go-edit { margin-left:auto; }
+.strip-note { padding:0 14px 10px 32px; font-size:12.5px; color:#777; }
+.strip-note .drift { color:#8a5a18; }
 .go-edit { border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:7px 14px; cursor:pointer; }
 .go-edit[disabled] { background:#fff; color:#aaa; border-color:#ddd; cursor:default; }
 .pick .rows { max-height:380px; overflow:auto; }
@@ -121,11 +130,40 @@ export class BulkEdit extends HTMLElement {
     this.selection = new Set(selected ?? items.map(i => i.id));
     this.filter = null;
     this.onlySelected = false;
+    // How the current selection came about. Pinned to ids, never to the query:
+    // if it followed the filter, changing a filter would silently change what
+    // you are about to edit.
+    this.scope = null;   // { mode:'page'|'matching', ids:Set, filter, count }
     this.#reset();
     this.#render();
   }
 
   get items() { return this.all.filter(i => this.selection.has(i.id)); }
+  get matching() { return this.filter ? this.all.filter(i => i.environment === this.filter) : this.all; }
+
+  static LIMIT = 10000;      // beyond this, bulk edit is not the right tool and says so
+  static PAGE = 60;          // rows rendered at once
+
+  // Three different sets, and the whole scope problem is people conflating them:
+  //   matching — everything the current filter matches
+  //   page     — the slice of that actually rendered
+  //   selection— what an operation will act on
+  get page() { return this.matching.slice(0, BulkEdit.PAGE); }
+
+  // What the selection is, and how it has drifted from how it was made.
+  get scopeReport() {
+    const total = this.selection.size;
+    const matchIds = new Set(this.matching.map(i => i.id));
+    const pageIds  = new Set(this.page.map(i => i.id));
+
+    // deliberately non-overlapping, so the numbers can be read as facts rather
+    // than as three ways of saying one thing
+    const notMatching = [...this.selection].filter(id => !matchIds.has(id)).length;
+    const offPage = [...this.selection].filter(id => matchIds.has(id) && !pageIds.has(id)).length;
+    const removed = this.scope ? [...this.scope.ids].filter(id => !this.selection.has(id)).length : 0;
+
+    return { total, offPage, notMatching, removed, mode: this.scope?.mode ?? null };
+  }
   get visible() {
     let v = this.filter ? this.all.filter(i => i.environment === this.filter) : this.all;
     if (this.onlySelected) v = v.filter(i => this.selection.has(i.id));
@@ -184,6 +222,23 @@ export class BulkEdit extends HTMLElement {
       s.operand = this.#field.type === 'number' ? Number(t.value)
                 : this.#field.type === 'multi-value' ? (t.value ? [t.value] : [])
                 : t.value;
+    } else if (t.dataset.scope !== undefined) {
+      if (t.value === 'matching') {
+        const ids = this.matching.map(i => i.id);
+        this.selection = new Set(ids);
+        this.scope = { mode: 'matching', ids: new Set(ids), filter: this.filter, count: ids.length };
+      } else {
+        const ids = this.page.map(i => i.id);
+        this.selection = new Set(ids);
+        this.scope = { mode: 'page', ids: new Set(ids), filter: this.filter, count: ids.length };
+      }
+      s.seededFor = null;
+    } else if (t.dataset.pageall !== undefined) {
+      // the header checkbox means exactly one thing: the rows you can see
+      const ids = this.page.map(i => i.id);
+      if (t.checked) { ids.forEach(id => this.selection.add(id)); this.scope = { mode: 'page', ids: new Set(ids), filter: this.filter, count: ids.length }; }
+      else ids.forEach(id => this.selection.delete(id));
+      s.seededFor = null;
     } else if (t.dataset.pick) {
       t.checked ? this.selection.add(t.dataset.pick) : this.selection.delete(t.dataset.pick);
       s.seededFor = null;
@@ -295,19 +350,15 @@ export class BulkEdit extends HTMLElement {
             `<button class="chip" data-filter="${v}" aria-pressed="${this.filter === v}">${v}</button>`).join('')}
           ${this.filter ? `<button class="chip" data-filter="">clear filter</button>` : ''}
           <button class="chip sel" data-only aria-pressed="${!!this.onlySelected}">Selected only</button>
-          <span class="scope">
-            <span><b>${total}</b> selected${offscreen > 0 ? ` · ${offscreen} not shown by this filter` : ''}</span>
-            <button class="go-edit" data-act="edit" ${total ? '' : 'disabled'}>Bulk edit ${total} host${total === 1 ? '' : 's'}</button>
-          </span>
+          <span class="matchcount">${this.matching.length.toLocaleString()} hosts match</span>
         </div>
 
-        <!-- the select-all treatment drops in here once it is chosen -->
-        <div class="slot">Selection scope · treatment pending. Row checkboxes work; the header checkbox and its
-          &ldquo;select all ${this.all.length} matching&rdquo; escalation are the piece still being designed.</div>
+        ${total ? this.#stripHTML() : ''}
 
         <div class="rows"><table>
-          <tr><th class="pad"></th><th>Host</th><th>Environment</th><th>Tags</th><th>Monitoring</th><th>Retention</th></tr>
-          ${rows.slice(0, 60).map(i => {
+          <tr><th class="pad"><input type="checkbox" data-pageall
+                ${this.page.length && this.page.every(i => this.selection.has(i.id)) ? 'checked' : ''}></th><th>Host</th><th>Environment</th><th>Tags</th><th>Monitoring</th><th>Retention</th></tr>
+          ${rows.slice(0, BulkEdit.PAGE).map(i => {
             const on = this.selection.has(i.id);
             return `<tr class="${on ? 'on' : ''}">
               <td class="pad"><input type="checkbox" data-pick="${i.id}" ${on ? 'checked' : ''}></td>
@@ -315,9 +366,44 @@ export class BulkEdit extends HTMLElement {
               <td class="tag">${fmt(i.tags)}</td><td>${fmt(i.monitoring)}</td><td>${i.retentionDays}d</td>
             </tr>`;
           }).join('')}
-          ${rows.length > 60 ? `<tr><td colspan="6" class="pad" style="color:#999">… ${rows.length - 60} more rows</td></tr>` : ''}
+          ${rows.length > BulkEdit.PAGE ? `<tr><td colspan="6" class="pad" style="color:#999">… ${(rows.length - BulkEdit.PAGE).toLocaleString()} more rows match this filter</td></tr>` : ''}
         </table></div>
       </div>`;
+  }
+
+  #stripHTML() {
+    const r = this.scopeReport;
+    const page = this.page.length;
+    const match = this.matching.length;
+    const overLimit = match > BulkEdit.LIMIT;
+    const label = r.mode === 'matching' ? 'All matching' : 'This page';
+
+    // Notes are stacked rather than merged: each is a different fact about the
+    // selection, and collapsing them into one sentence is how they get ignored.
+    const notes = [];
+    if (r.offPage > 0)     notes.push(`${r.offPage.toLocaleString()} not on this page`);
+    if (r.removed > 0)     notes.push(`${r.removed.toLocaleString()} removed from the ${this.scope.count.toLocaleString()} you selected`);
+    if (r.notMatching > 0) notes.push(`<span class="drift">${r.notMatching.toLocaleString()} no longer match the current filter</span>`);
+
+    return `<div class="strip">
+      <div class="strip-main">
+        <span class="tick">✓</span>
+        <b>${r.total.toLocaleString()}</b> host${r.total === 1 ? '' : 's'} selected
+        <span class="scope-ctl">
+          <span class="scope-lbl">Scope</span>
+          <select data-scope>
+            <option value="page" ${r.mode !== 'matching' ? 'selected' : ''}>This page (${page.toLocaleString()})</option>
+            <option value="matching" ${r.mode === 'matching' ? 'selected' : ''} ${overLimit ? 'disabled' : ''}>
+              ${overLimit
+                ? `All ${match.toLocaleString()} matching — too many for bulk edit (limit ${BulkEdit.LIMIT.toLocaleString()})`
+                : `All ${match.toLocaleString()} matching this filter`}
+            </option>
+          </select>
+        </span>
+        <button class="go-edit" data-act="edit">Bulk edit ${r.total.toLocaleString()} host${r.total === 1 ? '' : 's'} →</button>
+      </div>
+      ${notes.length ? `<div class="strip-note">${notes.join(' · ')}</div>` : ''}
+    </div>`;
   }
 
   #act(name) {
