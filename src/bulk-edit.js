@@ -31,7 +31,10 @@ select, input[type=text] { border:1px solid #b8b8b8; background:#fff; padding:6p
 .summary { margin-top:9px; font-size:13px; color:#444; }
 .summary b { color:#1a1a1a; }
 .warn { margin-top:8px; font-size:12px; border-left:3px solid #8a2318; padding:5px 9px; color:#8a2318; background:#fbf2f0; }
-.addop { margin-top:7px; font-size:12.5px; color:#666; }
+.addop { margin-top:7px; font-size:12.5px; color:#666; background:none; border:0; padding:0; cursor:pointer; font-family:inherit; }
+.ghead { width:100%; text-align:left; background:none; border:0; font:inherit; }
+.ghead:focus-visible, .chip:focus-visible, .go-edit:focus-visible, .apply:focus-visible,
+input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:2px solid #1a5fb4; outline-offset:1px; }
 
 .label { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:#888; margin:20px 0 7px; }
 
@@ -88,6 +91,14 @@ tr.skipped .after { color:#aaa; font-weight:400; }
 .pick td { padding:6px 10px 6px 0; }
 .pick tr.on td { background:#f7f9fd; }
 .pick .pad { padding-left:14px; }
+.foot { display:flex; align-items:center; gap:12px; padding:10px 14px; border-top:1px solid #ececec; font-size:12.5px; color:#666; flex-wrap:wrap; }
+.foot .shows b { color:#1a1a1a; }
+.foot .onpage { color:#888; }
+.pager { margin-left:auto; display:flex; gap:3px; align-items:center; }
+.pnum { font:inherit; font-size:12.5px; border:1px solid transparent; background:none; color:#1a5fb4; padding:3px 8px; cursor:pointer; }
+.pnum[aria-current=true] { border-color:#c8c8c8; background:#fff; color:#1a1a1a; font-weight:600; }
+.pnum[disabled] { color:#ccc; cursor:default; }
+.pager .gap { color:#bbb; padding:0 2px; }
 .slot { border:1px dashed #c0c0c0; background:#fafafa; color:#888; font-size:12.5px; padding:8px 11px; margin:10px 14px 12px; }
 .backlink { font-size:12.5px; color:#666; margin-bottom:10px; }
 .backlink a { color:#1a5fb4; cursor:pointer; text-decoration:none; }
@@ -134,6 +145,7 @@ export class BulkEdit extends HTMLElement {
     this.selection = new Set(selected ?? items.map(i => i.id));
     this.filter = null;
     this.onlySelected = false;
+    this.pageNo = 0;
     // How the current selection came about. Pinned to ids, never to the query:
     // if it followed the filter, changing a filter would silently change what
     // you are about to edit.
@@ -152,7 +164,11 @@ export class BulkEdit extends HTMLElement {
   //   matching — everything the current filter matches
   //   page     — the slice of that actually rendered
   //   selection— what an operation will act on
-  get page() { return this.matching.slice(0, BulkEdit.PAGE); }
+  get pageCount() { return Math.max(1, Math.ceil(this.matching.length / BulkEdit.PAGE)); }
+  get page() {
+    const start = (this.pageNo ?? 0) * BulkEdit.PAGE;
+    return this.matching.slice(start, start + BulkEdit.PAGE);
+  }
 
   // What the selection is, and how it has drifted from how it was made.
   get scopeReport() {
@@ -274,10 +290,12 @@ export class BulkEdit extends HTMLElement {
       this.#state.seededFor = null;
       return this.#render();
     }
+    const pg = e.target.closest?.('[data-page]');
+    if (pg) { this.pageNo = Number(pg.dataset.page); return this.#render(); }
     const only = e.target.closest?.('[data-only]');
-    if (only) { this.onlySelected = !this.onlySelected; return this.#render(); }
+    if (only) { this.onlySelected = !this.onlySelected; this.pageNo = 0; return this.#render(); }
     const chip = e.target.closest?.('[data-filter]');
-    if (chip) { this.filter = chip.dataset.filter || null; return this.#render(); }
+    if (chip) { this.filter = chip.dataset.filter || null; this.pageNo = 0; return this.#render(); }
     const act = e.target.closest?.('[data-act]');
     if (act) return this.#act(act.dataset.act);
     const head = e.target.closest?.('.ghead'), more = e.target.closest?.('[data-showall]');
@@ -289,8 +307,30 @@ export class BulkEdit extends HTMLElement {
     }
   }
 
+  // innerHTML replacement destroys focus, so remember where it was and put it
+  // back. Without this a keyboard user is returned to the top of the document
+  // after every single interaction.
+  #keep() {
+    const a = this.shadowRoot.activeElement;
+    if (!a) return null;
+    for (const k of ['pick', 'exclude', 'scope', 'pageall', 'search', 'fix', 'act', 'filter', 'only', 'key', 'page']) {
+      if (a.dataset?.[k] !== undefined) return { attr: `[data-${k}${a.dataset[k] ? `="${a.dataset[k]}"` : ''}]`, sel: a.selectionStart };
+    }
+    if (a.id) return { attr: `#${a.id}`, sel: a.selectionStart };
+    return null;
+  }
+
+  #restore(mark) {
+    if (!mark) return;
+    const el = this.shadowRoot.querySelector(mark.attr);
+    if (!el) return;
+    el.focus();
+    if (mark.sel != null && el.setSelectionRange) { try { el.setSelectionRange(mark.sel, mark.sel); } catch {} }
+  }
+
   #render(opts = {}) {
-    if (this.#phase.name === 'browsing') return this.#renderPicker(opts);
+    const mark = this.#keep();
+    if (this.#phase.name === 'browsing') { this.#renderPicker(opts); return this.#restore(mark); }
     const { field, p, groups, current } = this.#compute();
     const s = this.#state;
     const methods = methodsFor(field);
@@ -326,9 +366,9 @@ export class BulkEdit extends HTMLElement {
             Apply to ${p.counts.changing} host${p.counts.changing === 1 ? '' : 's'}
           </button>
         </div>
-        <div class="summary">${this.#needsValue(field, s) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
+        <div class="summary" role="status" aria-live="polite">${this.#needsValue(field, s) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
         ${destructive && p.counts.changing ? `<div class="warn">${METHOD_LABEL[s.method]} discards values that are not shown anywhere else.</div>` : ''}
-        <div class="addop">+ Add another operation</div>
+        <button class="addop" type="button">+ Add another operation</button>
       </div>
 
       ${this.#phaseHTML(p)}
@@ -339,10 +379,7 @@ export class BulkEdit extends HTMLElement {
         : '<div class="empty">Nothing selected.</div>'}
     `;
 
-    if (opts.focus) {
-      const el = this.shadowRoot.querySelector(opts.focus);
-      if (el) { const v = el.value; el.focus(); el.setSelectionRange(v.length, v.length); }
-    }
+    this.#restore(mark);
   }
 
   #needsValue(field, s) {
@@ -352,7 +389,7 @@ export class BulkEdit extends HTMLElement {
   }
 
   #renderPicker(opts = {}) {
-    const rows = this.visible;
+    const rows = this.page;
     const chosen = rows.filter(i => this.selection.has(i.id)).length;
     const total = this.selection.size;
     const offscreen = total - chosen;
@@ -371,18 +408,19 @@ export class BulkEdit extends HTMLElement {
         ${total ? this.#stripHTML() : ''}
 
         <div class="rows"><table>
-          <tr><th class="pad"><input type="checkbox" data-pageall
+          <tr><th class="pad"><input type="checkbox" data-pageall aria-label="Select all ${this.page.length} rows on this page"
                 ${this.page.length && this.page.every(i => this.selection.has(i.id)) ? 'checked' : ''}></th><th>Host</th><th>Environment</th><th>Tags</th><th>Monitoring</th><th>Retention</th></tr>
-          ${rows.slice(0, BulkEdit.PAGE).map(i => {
+          ${this.page.map(i => {
             const on = this.selection.has(i.id);
             return `<tr class="${on ? 'on' : ''}">
-              <td class="pad"><input type="checkbox" data-pick="${i.id}" ${on ? 'checked' : ''}></td>
+              <td class="pad"><input type="checkbox" data-pick="${i.id}" ${on ? 'checked' : ''}
+                    aria-label="Select ${i.hostname}"></td>
               <td>${i.hostname}</td><td>${i.environment}</td>
               <td class="tag">${fmt(i.tags)}</td><td>${fmt(i.monitoring)}</td><td>${i.retentionDays}d</td>
             </tr>`;
           }).join('')}
-          ${rows.length > BulkEdit.PAGE ? `<tr><td colspan="6" class="pad" style="color:#999">… ${(rows.length - BulkEdit.PAGE).toLocaleString()} more rows match this filter</td></tr>` : ''}
         </table></div>
+        ${this.#footerHTML()}
       </div>`;
 
     // indeterminate is a property, not an attribute — it cannot be set in markup.
@@ -392,6 +430,33 @@ export class BulkEdit extends HTMLElement {
       const on = this.page.filter(i => this.selection.has(i.id)).length;
       head.indeterminate = on > 0 && on < this.page.length;
     }
+  }
+
+  #footerHTML() {
+    const n = this.matching.length, per = BulkEdit.PAGE, pages = this.pageCount, cur = this.pageNo ?? 0;
+    if (!n) return '';
+    const from = cur * per + 1, to = Math.min(n, (cur + 1) * per);
+    const onPage = this.page.filter(i => this.selection.has(i.id)).length;
+
+    // a short window around the current page, so 31 pages does not render 31 buttons
+    const win = new Set([0, pages - 1, cur - 1, cur, cur + 1].filter(i => i >= 0 && i < pages));
+    const nums = [...win].sort((a, b) => a - b);
+    const items = [];
+    nums.forEach((i, k) => {
+      if (k && i - nums[k - 1] > 1) items.push('<span class="gap">…</span>');
+      items.push(`<button type="button" class="pnum" data-page="${i}" aria-current="${i === cur}"
+        aria-label="Page ${i + 1} of ${pages}">${i + 1}</button>`);
+    });
+
+    return `<div class="foot">
+      <span class="shows">Showing <b>${from.toLocaleString()}&ndash;${to.toLocaleString()}</b> of ${n.toLocaleString()}${this.filter ? ' matching' : ''}
+        ${onPage ? `<span class="onpage">· ${onPage} selected on this page</span>` : ''}</span>
+      ${pages > 1 ? `<nav class="pager" aria-label="Pagination">
+        <button type="button" class="pnum" data-page="${Math.max(0, cur - 1)}" ${cur === 0 ? 'disabled' : ''} aria-label="Previous page">&lsaquo;</button>
+        ${items.join('')}
+        <button type="button" class="pnum" data-page="${Math.min(pages - 1, cur + 1)}" ${cur === pages - 1 ? 'disabled' : ''} aria-label="Next page">&rsaquo;</button>
+      </nav>` : ''}
+    </div>`;
   }
 
   #stripHTML() {
@@ -408,7 +473,7 @@ export class BulkEdit extends HTMLElement {
     if (r.removed > 0)     notes.push(`${r.removed.toLocaleString()} removed from the ${this.scope.count.toLocaleString()} you selected`);
     if (r.notMatching > 0) notes.push(`<span class="drift">${r.notMatching.toLocaleString()} no longer match the current filter</span>`);
 
-    return `<div class="strip">
+    return `<div class="strip" role="status" aria-live="polite">
       <div class="strip-main">
         <span class="tick">✓</span>
         <b>${r.total.toLocaleString()}</b> host${r.total === 1 ? '' : 's'} selected
@@ -581,12 +646,12 @@ export class BulkEdit extends HTMLElement {
     const hidden = kept.length - visible.length;
 
     return `<div class="group ${quiet ? 'quiet' : ''}">
-      <div class="ghead" data-key="${g.key}">
-        <span class="caret">${open ? '▼' : '►'}</span>
+      <button class="ghead" type="button" data-key="${g.key}" aria-expanded="${open}">
+        <span class="caret" aria-hidden="true">${open ? '▼' : '►'}</span>
         <span class="name">${g.label}</span>
         <span class="pill">${quiet ? `${g.total} host${g.total === 1 ? '' : 's'}` : `${g.changing} will change`}</span>
         ${g.excluded ? `<span class="exc">· ${g.excluded} excluded</span>` : ''}
-      </div>
+      </button>
       ${open ? `<div class="gbody">
         ${g.total > 5 ? `<input class="search" type="text" data-search="${g.key}" value="${s.query[g.key] ?? ''}" placeholder="Search within this group…">` : ''}
         ${visible.length ? `<table>
@@ -603,7 +668,8 @@ export class BulkEdit extends HTMLElement {
   #rowHTML(r, field, quiet) {
     const on = r.state !== 'excluded';
     return `<tr class="${on ? '' : 'skipped'}">
-      <td><input type="checkbox" data-exclude="${r.id}" ${on ? 'checked' : ''}></td>
+      <td><input type="checkbox" data-exclude="${r.id}" ${on ? 'checked' : ''}
+            aria-label="${on ? 'Exclude' : 'Include'} ${r.item.hostname ?? r.id}"></td>
       <td>${r.item.hostname ?? r.id}</td>
       <td class="before">${fmt(r.before)}</td>
       <td class="arrow">${quiet ? '' : '→'}</td>
@@ -616,4 +682,6 @@ export class BulkEdit extends HTMLElement {
 const fmt = v => Array.isArray(v) ? (v.length ? v.join(', ') : 'none')
                : typeof v === 'boolean' ? (v ? 'on' : 'off') : String(v ?? '');
 
-customElements.define('bulk-edit', BulkEdit);
+// guard re-registration so a cache-busted reimport during development fails
+// loudly at the import rather than silently keeping the old class alive
+if (!customElements.get('bulk-edit')) customElements.define('bulk-edit', BulkEdit);
