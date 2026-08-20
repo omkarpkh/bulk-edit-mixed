@@ -64,6 +64,7 @@ tr.skipped .after { color:#aaa; font-weight:400; }
 .pick .top { display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:12px 14px; border-bottom:1px solid #ececec; }
 .chip { font-size:12.5px; border:1px solid #c8c8c8; background:#fff; padding:4px 11px; cursor:pointer; }
 .chip[aria-pressed=true] { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+.chip.sel { margin-left:6px; }
 .pick .scope { margin-left:auto; font-size:13px; color:#444; display:flex; align-items:center; gap:12px; }
 .pick .scope b { color:#1a1a1a; }
 .go-edit { border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:7px 14px; cursor:pointer; }
@@ -119,12 +120,17 @@ export class BulkEdit extends HTMLElement {
     this.fields = fields;
     this.selection = new Set(selected ?? items.map(i => i.id));
     this.filter = null;
+    this.onlySelected = false;
     this.#reset();
     this.#render();
   }
 
   get items() { return this.all.filter(i => this.selection.has(i.id)); }
-  get visible() { return this.filter ? this.all.filter(i => i.environment === this.filter) : this.all; }
+  get visible() {
+    let v = this.filter ? this.all.filter(i => i.environment === this.filter) : this.all;
+    if (this.onlySelected) v = v.filter(i => this.selection.has(i.id));
+    return v;
+  }
 
   #reset() {
     const f = this.fields[0];
@@ -178,6 +184,9 @@ export class BulkEdit extends HTMLElement {
       s.operand = this.#field.type === 'number' ? Number(t.value)
                 : this.#field.type === 'multi-value' ? (t.value ? [t.value] : [])
                 : t.value;
+    } else if (t.dataset.pick) {
+      t.checked ? this.selection.add(t.dataset.pick) : this.selection.delete(t.dataset.pick);
+      s.seededFor = null;
     } else if (t.dataset.exclude) {
       t.checked ? s.excluded.delete(t.dataset.exclude) : s.excluded.add(t.dataset.exclude);
     } else return;
@@ -195,6 +204,8 @@ export class BulkEdit extends HTMLElement {
   }
 
   #onClick(e) {
+    const only = e.target.closest?.('[data-only]');
+    if (only) { this.onlySelected = !this.onlySelected; return this.#render(); }
     const chip = e.target.closest?.('[data-filter]');
     if (chip) { this.filter = chip.dataset.filter || null; return this.#render(); }
     const act = e.target.closest?.('[data-act]');
@@ -283,6 +294,7 @@ export class BulkEdit extends HTMLElement {
           ${['prod', 'staging', 'dev'].map(v =>
             `<button class="chip" data-filter="${v}" aria-pressed="${this.filter === v}">${v}</button>`).join('')}
           ${this.filter ? `<button class="chip" data-filter="">clear filter</button>` : ''}
+          <button class="chip sel" data-only aria-pressed="${!!this.onlySelected}">Selected only</button>
           <span class="scope">
             <span><b>${total}</b> selected${offscreen > 0 ? ` · ${offscreen} not shown by this filter` : ''}</span>
             <button class="go-edit" data-act="edit" ${total ? '' : 'disabled'}>Bulk edit ${total} host${total === 1 ? '' : 's'}</button>
