@@ -1,0 +1,10 @@
+{
+  "name": "mixed",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Bulk editing for values that differ. A study in being honest about what will change.",
+  "scripts": {
+    "test": "node --test spec/model.test.js"
+  }
+}

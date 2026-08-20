@@ -1,0 +1,37 @@
+{
+  "_note": "Field type determines which apply methods are legal. This is the core of the model: the verb set is a function of the field, not a universal menu.",
+  "types": {
+    "single-select": {
+      "methods": ["set"],
+      "mixedLabel": "Mixed",
+      "note": "One value per item. Only replacement is meaningful."
+    },
+    "multi-value": {
+      "methods": ["add", "remove", "replace", "clear"],
+      "mixedLabel": "Varies",
+      "note": "Set semantics. Add and remove are the common cases; replace is destructive and must say so."
+    },
+    "boolean": {
+      "methods": ["enable", "disable"],
+      "mixedLabel": "Mixed",
+      "note": "Never a toggle in bulk — a toggle on mixed state has no defined meaning."
+    },
+    "number": {
+      "methods": ["set", "increaseBy", "decreaseBy"],
+      "mixedLabel": "Mixed",
+      "note": "Relative methods are why bulk edit cannot just be a form."
+    }
+  },
+  "fields": [
+    { "key": "environment", "label": "Environment", "type": "single-select",
+      "options": ["Production", "Staging", "Development"] },
+    { "key": "region", "label": "Region", "type": "single-select",
+      "options": ["us-east-1", "us-west-2", "eu-west-1", "ap-south-1"] },
+    { "key": "tags", "label": "Tags", "type": "multi-value",
+      "options": ["pci", "public", "internal", "gpu", "legacy", "monitored", "db"] },
+    { "key": "monitoring", "label": "Monitoring", "type": "boolean" },
+    { "key": "retentionDays", "label": "Log retention", "type": "number", "unit": "days", "min": 1, "max": 365 },
+    { "key": "owner", "label": "Owner", "type": "single-select",
+      "options": ["Platform", "Security", "Data", "Web"] }
+  ]
+}

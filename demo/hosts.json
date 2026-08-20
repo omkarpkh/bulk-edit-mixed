@@ -1,0 +1,296 @@
+[
+  {
+    "id": "h-001",
+    "name": "app-01.iad",
+    "environment": "Staging",
+    "region": "eu-west-1",
+    "tags": [
+      "pci",
+      "internal"
+    ],
+    "monitoring": true,
+    "retentionDays": 350,
+    "owner": "Security"
+  },
+  {
+    "id": "h-002",
+    "name": "worker-04.iad",
+    "environment": "Production",
+    "region": "us-west-2",
+    "tags": [
+      "pci"
+    ],
+    "monitoring": false,
+    "retentionDays": 30,
+    "owner": "Web"
+  },
+  {
+    "id": "h-003",
+    "name": "cache-01.bom",
+    "environment": "Production",
+    "region": "us-east-1",
+    "tags": [],
+    "monitoring": true,
+    "retentionDays": 7,
+    "owner": "Security"
+  },
+  {
+    "id": "h-004",
+    "name": "app-03.sfo",
+    "environment": "Staging",
+    "region": "us-east-1",
+    "tags": [
+      "legacy",
+      "public"
+    ],
+    "monitoring": false,
+    "retentionDays": 90,
+    "owner": "Security"
+  },
+  {
+    "id": "h-005",
+    "name": "cache-01.iad",
+    "environment": "Staging",
+    "region": "us-west-2",
+    "tags": [],
+    "monitoring": true,
+    "retentionDays": 180,
+    "owner": "Web"
+  },
+  {
+    "id": "h-006",
+    "name": "edge-03.sfo",
+    "environment": "Staging",
+    "region": "us-west-2",
+    "tags": [
+      "gpu",
+      "legacy"
+    ],
+    "monitoring": false,
+    "retentionDays": 14,
+    "owner": "Platform"
+  },
+  {
+    "id": "h-007",
+    "name": "worker-03.bom",
+    "environment": "Development",
+    "region": "eu-west-1",
+    "tags": [
+      "legacy"
+    ],
+    "monitoring": false,
+    "retentionDays": 7,
+    "owner": "Platform"
+  },
+  {
+    "id": "h-008",
+    "name": "db-04.bom",
+    "environment": "Development",
+    "region": "us-east-1",
+    "tags": [
+      "internal",
+      "public"
+    ],
+    "monitoring": false,
+    "retentionDays": 7,
+    "owner": "Data"
+  },
+  {
+    "id": "h-009",
+    "name": "cache-04.iad",
+    "environment": "Staging",
+    "region": "us-east-1",
+    "tags": [
+      "gpu",
+      "internal",
+      "legacy"
+    ],
+    "monitoring": true,
+    "retentionDays": 30,
+    "owner": "Platform"
+  },
+  {
+    "id": "h-010",
+    "name": "worker-03.bom",
+    "environment": "Production",
+    "region": "eu-west-1",
+    "tags": [
+      "internal",
+      "legacy",
+      "monitored"
+    ],
+    "monitoring": true,
+    "retentionDays": 30,
+    "owner": "Data"
+  },
+  {
+    "id": "h-011",
+    "name": "app-02.dub",
+    "environment": "Production",
+    "region": "us-west-2",
+    "tags": [
+      "gpu",
+      "pci"
+    ],
+    "monitoring": false,
+    "retentionDays": 14,
+    "owner": "Web"
+  },
+  {
+    "id": "h-012",
+    "name": "worker-04.dub",
+    "environment": "Staging",
+    "region": "us-west-2",
+    "tags": [
+      "pci",
+      "public"
+    ],
+    "monitoring": true,
+    "retentionDays": 90,
+    "owner": "Data"
+  },
+  {
+    "id": "h-013",
+    "name": "worker-02.sfo",
+    "environment": "Development",
+    "region": "us-east-1",
+    "tags": [
+      "internal",
+      "monitored"
+    ],
+    "monitoring": true,
+    "retentionDays": 14,
+    "owner": "Security"
+  },
+  {
+    "id": "h-014",
+    "name": "worker-02.dub",
+    "environment": "Development",
+    "region": "eu-west-1",
+    "tags": [
+      "pci"
+    ],
+    "monitoring": true,
+    "retentionDays": 14,
+    "owner": "Web"
+  },
+  {
+    "id": "h-015",
+    "name": "cache-03.sfo",
+    "environment": "Development",
+    "region": "us-east-1",
+    "tags": [
+      "legacy"
+    ],
+    "monitoring": true,
+    "retentionDays": 180,
+    "owner": "Web"
+  },
+  {
+    "id": "h-016",
+    "name": "worker-04.iad",
+    "environment": "Staging",
+    "region": "us-west-2",
+    "tags": [
+      "gpu",
+      "pci"
+    ],
+    "monitoring": true,
+    "retentionDays": 14,
+    "owner": "Web"
+  },
+  {
+    "id": "h-017",
+    "name": "edge-01.iad",
+    "environment": "Production",
+    "region": "us-east-1",
+    "tags": [],
+    "monitoring": false,
+    "retentionDays": 14,
+    "owner": "Platform"
+  },
+  {
+    "id": "h-018",
+    "name": "db-04.sfo",
+    "environment": "Staging",
+    "region": "eu-west-1",
+    "tags": [
+      "db",
+      "pci"
+    ],
+    "monitoring": true,
+    "retentionDays": 90,
+    "owner": "Data"
+  },
+  {
+    "id": "h-019",
+    "name": "app-04.bom",
+    "environment": "Staging",
+    "region": "ap-south-1",
+    "tags": [],
+    "monitoring": true,
+    "retentionDays": 30,
+    "owner": "Platform"
+  },
+  {
+    "id": "h-020",
+    "name": "edge-03.bom",
+    "environment": "Production",
+    "region": "us-west-2",
+    "tags": [],
+    "monitoring": false,
+    "retentionDays": 7,
+    "owner": "Security"
+  },
+  {
+    "id": "h-021",
+    "name": "cache-01.dub",
+    "environment": "Development",
+    "region": "us-east-1",
+    "tags": [
+      "public"
+    ],
+    "monitoring": false,
+    "retentionDays": 30,
+    "owner": "Data"
+  },
+  {
+    "id": "h-022",
+    "name": "db-03.sfo",
+    "environment": "Production",
+    "region": "us-west-2",
+    "tags": [
+      "db"
+    ],
+    "monitoring": true,
+    "retentionDays": 30,
+    "owner": "Security"
+  },
+  {
+    "id": "h-023",
+    "name": "app-01.dub",
+    "environment": "Production",
+    "region": "ap-south-1",
+    "tags": [
+      "gpu",
+      "internal"
+    ],
+    "monitoring": true,
+    "retentionDays": 14,
+    "owner": "Data"
+  },
+  {
+    "id": "h-024",
+    "name": "db-01.sfo",
+    "environment": "Staging",
+    "region": "ap-south-1",
+    "tags": [
+      "db",
+      "internal",
+      "pci"
+    ],
+    "monitoring": true,
+    "retentionDays": 30,
+    "owner": "Security"
+  }
+]
