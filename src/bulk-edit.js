@@ -5,7 +5,7 @@
 // the model is wrong — there is no second place for it to go wrong.
 
 import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, groupByTransition,
-         reconcile, retryScope, describeResult } from './model.js?v=1787247806';
+         reconcile, retryScope, describeResult } from './model.js?v=1787287863';
 
 const CSS = `
 :host { display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:#1a1a1a; }
@@ -13,18 +13,22 @@ const CSS = `
 button, input, select { font:inherit; color:inherit; }
 
 .bar { border:1px solid #d4d4d4; background:#fff; padding:14px 16px; }
-.row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+/* the operation reads as a sentence — it wraps as a whole or not at all,
+   because breaking between the verb and its object strands the value */
+.sentence { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
+.context { margin-top:12px; }
 select, input[type=text] { border:1px solid #b8b8b8; background:#fff; padding:6px 9px; min-width:130px; }
 .arrow { color:#999; }
 
-.dist { display:flex; flex-direction:column; gap:4px; width:270px; height:72px; flex:0 0 auto; }
-.dist .track { display:flex; width:100%; height:9px; border:1px solid #c8c8c8; overflow:hidden; }
+.dist { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.dist .track { display:flex; width:220px; height:9px; border:1px solid #c8c8c8; overflow:hidden; flex:0 0 auto; }
 .dist .seg { min-width:3px; }
 .dist .seg.rest { background:repeating-linear-gradient(45deg,#f0f0f0,#f0f0f0 3px,#e6e6e6 3px,#e6e6e6 6px); min-width:0; }
-.dist .keys { display:flex; gap:4px 10px; flex-wrap:wrap; align-content:flex-start; font-size:11px; line-height:1.4; color:#666; flex:1; overflow:hidden; }
+.dist .keys { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:11.5px; line-height:1.4; color:#666; }
 .dist .keys b { color:#1a1a1a; font-weight:600; }
 .dist .keys i { font-style:normal; display:inline-block; width:7px; height:7px; margin-right:4px; border:1px solid #0003; }
-.dist .cap { font-size:11px; color:#777; }
+.dist .cap { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:#999; flex:0 0 auto; }
 
 .apply { margin-left:auto; border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:8px 15px; cursor:pointer; }
 .apply[disabled] { background:#fff; color:#999; border-color:#ccc; cursor:default; }
@@ -33,6 +37,22 @@ select, input[type=text] { border:1px solid #b8b8b8; background:#fff; padding:6p
 .summary { margin-top:9px; font-size:13px; color:#444; }
 .summary b { color:#1a1a1a; }
 .warn { margin-top:8px; font-size:12px; border-left:3px solid #8a2318; padding:5px 9px; color:#8a2318; background:#fbf2f0; }
+.unit { font-size:12.5px; color:#777; margin-left:-4px; }
+.multi-dist { align-items:flex-start; }
+.multi-dist .mini { display:flex; align-items:center; gap:9px; }
+.multi-dist .track { width:120px; }
+.multi-dist .mlab { font-size:11.5px; color:#666; }
+.multi-dist .mlab b { color:#1a1a1a; }
+.multi { position:relative; display:inline-flex; }
+.multi-btn { display:flex; align-items:center; gap:5px; min-width:150px; min-height:31px; border:1px solid #b8b8b8;
+  background:#fff; padding:4px 8px; font:inherit; cursor:pointer; text-align:left; flex-wrap:wrap; }
+.multi-btn .ph { color:#999; }
+.multi-btn .caret { margin-left:auto; color:#888; font-size:10px; }
+.vchip { background:#eef; border:1px solid #dde; font-size:11.5px; padding:1px 6px; }
+.multi-menu { position:absolute; top:calc(100% + 3px); left:0; z-index:5; min-width:190px; max-height:210px; overflow:auto;
+  background:#fff; border:1px solid #b8b8b8; box-shadow:0 3px 10px #0002; padding:5px 0; }
+.mrow { display:flex; align-items:center; gap:8px; padding:5px 11px; font-size:13px; cursor:pointer; }
+.mrow:hover { background:#f4f6fb; }
 .addop { margin-top:7px; font-size:12.5px; color:#666; background:none; border:0; padding:0; cursor:pointer; font-family:inherit; }
 .ghead { width:100%; text-align:left; background:none; border:0; font:inherit; }
 .ghead:focus-visible, .chip:focus-visible, .go-edit:focus-visible, .apply:focus-visible,
@@ -261,6 +281,10 @@ export class BulkEdit extends HTMLElement {
       if (t.checked) { ids.forEach(id => this.selection.add(id)); this.scope = { mode: 'page', ids: new Set(ids), filter: this.filter, count: ids.length }; }
       else ids.forEach(id => this.selection.delete(id));
       s.seededFor = null;
+    } else if (t.dataset.val !== undefined) {
+      const cur = Array.isArray(s.operand) ? [...s.operand] : [];
+      s.operand = t.checked ? [...cur, t.dataset.val] : cur.filter(v => v !== t.dataset.val);
+      s.seededFor = null;
     } else if (t.dataset.pick) {
       t.checked ? this.selection.add(t.dataset.pick) : this.selection.delete(t.dataset.pick);
       s.seededFor = null;
@@ -281,6 +305,10 @@ export class BulkEdit extends HTMLElement {
   }
 
   #onClick(e) {
+    const multi = e.target.closest?.('[data-multi]');
+    if (multi) { this.#state.pickerOpen = !this.#state.pickerOpen; return this.#render(); }
+    // clicking anywhere else closes the value menu
+    if (this.#state.pickerOpen && !e.target.closest?.('.multi')) { this.#state.pickerOpen = false; this.#render(); }
     const fix = e.target.closest?.('[data-fix]');
     if (fix) {
       const k = fix.dataset.fix;
@@ -353,21 +381,20 @@ export class BulkEdit extends HTMLElement {
       <div class="backlink"><a data-act="reselect">← Change selection</a> · ${this.selection.size} of ${this.all.length} hosts</div>
       <div class="bar">
         <div class="row">
-          <select id="field">${this.fields.map(f =>
-            `<option value="${f.key}" ${f.key === field.key ? 'selected' : ''}>${f.label ?? f.key}</option>`).join('')}</select>
-
-          ${this.#distHTML(current, field)}
-
-          <span class="arrow">→</span>
-          <select id="method">${methods.map(m =>
-            `<option value="${m}" ${m === s.method ? 'selected' : ''}>${METHOD_LABEL[m]}</option>`).join('')}</select>
-
-          ${this.#operandHTML(field, s.method, s.operand)}
+          <span class="sentence">
+            <select id="field" aria-label="Field to change">${this.fields.map(f =>
+              `<option value="${f.key}" ${f.key === field.key ? 'selected' : ''}>${f.label ?? f.key}</option>`).join('')}</select>
+            <span class="arrow" aria-hidden="true">→</span>
+            <select id="method" aria-label="What to do">${methods.map(m =>
+              `<option value="${m}" ${m === s.method ? 'selected' : ''}>${METHOD_LABEL[m]}</option>`).join('')}</select>
+            ${this.#operandHTML(field, s.method, s.operand)}
+          </span>
 
           <button class="apply ${destructive ? 'destructive' : ''}" data-act="apply" ${p.counts.changing && !this.#needsValue(field, s) ? '' : 'disabled'}>
-            Apply to ${p.counts.changing} host${p.counts.changing === 1 ? '' : 's'}
+            Apply to ${p.counts.changing.toLocaleString()} host${p.counts.changing === 1 ? '' : 's'}
           </button>
         </div>
+        <div class="context">${this.#distHTML(current, field)}</div>
         <div class="summary" role="status" aria-live="polite">${this.#needsValue(field, s) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
         ${destructive && p.counts.changing ? `<div class="warn">${METHOD_LABEL[s.method]} discards values that are not shown anywhere else.</div>` : ''}
         <button class="addop" type="button">+ Add another operation</button>
@@ -618,15 +645,20 @@ export class BulkEdit extends HTMLElement {
     // are about to apply.
     if (field.type === 'multi-value') {
       const ops = Array.isArray(this.#state.operand) ? this.#state.operand : [];
-      const v = ops[0];
-      if (v == null) return '';
-      const have = (current.presence ?? []).find(x => x.value === v)?.count ?? 0;
-      return `<div class="dist">
+      if (!ops.length) return '';
+      const pres = current.presence ?? [];
+      // one bar per value, because each is its own 0–100% question and they do
+      // not compose into a whole
+      return `<div class="dist multi-dist">
         <div class="cap">Currently</div>
-        <div class="track"><span class="seg" style="flex:${have};background:${COLORS[0]}"></span
-          ><span class="seg rest" style="flex:${total - have}"></span></div>
-        <div class="keys"><span>${have.toLocaleString()} of ${total.toLocaleString()} already have
-          <b>${v}</b> (${Math.round(have / total * 100)}%)</span></div>
+        ${ops.map((v, i) => {
+          const have = pres.find(x => x.value === v)?.count ?? 0;
+          return `<span class="mini">
+            <span class="track"><span class="seg" style="flex:${have};background:${COLORS[i % COLORS.length]}"></span
+              ><span class="seg rest" style="flex:${total - have}"></span></span>
+            <span class="mlab"><b>${have.toLocaleString()}</b> of ${total.toLocaleString()} have ${v}</span>
+          </span>`;
+        }).join('')}
       </div>`;
     }
 
@@ -657,11 +689,35 @@ export class BulkEdit extends HTMLElement {
 
   #operandHTML(field, method, operand) {
     if (method === 'clear' || field.type === 'boolean') return '';
-    if (field.type === 'number') return `<span class="arrow">→</span><input id="operand" type="text" value="${operand ?? ''}" style="min-width:70px">`;
+    if (field.type === 'number')
+      return `<span class="arrow" aria-hidden="true">→</span><input id="operand" type="text" aria-label="Value"
+                value="${operand ?? ''}" style="min-width:74px">${field.unit ? `<span class="unit">${field.unit}</span>` : ''}`;
+
     const opts = field.options ?? [...new Set(this.items.flatMap(i => [].concat(i[field.key] ?? [])))].sort();
+
+    // A multi-value field takes a set, not a value. plan() and groupByTransition
+    // have always accepted several — offering one at a time was the interface
+    // under-serving the model.
+    if (field.type === 'multi-value') {
+      const chosen = Array.isArray(operand) ? operand : [];
+      const open = this.#state.pickerOpen;
+      return `<span class="arrow" aria-hidden="true">→</span>
+        <span class="multi">
+          <button type="button" class="multi-btn" data-multi aria-expanded="${!!open}" aria-haspopup="true">
+            ${chosen.length
+              ? chosen.map(v => `<span class="vchip">${v}</span>`).join('')
+              : '<span class="ph">Choose values…</span>'}
+            <span class="caret" aria-hidden="true">▾</span>
+          </button>
+          ${open ? `<div class="multi-menu" role="group" aria-label="Values">
+            ${opts.map(o => `<label class="mrow"><input type="checkbox" data-val="${o}"
+                ${chosen.includes(String(o)) ? 'checked' : ''}> ${o}</label>`).join('')}
+          </div>` : ''}
+        </span>`;
+    }
+
     const val = Array.isArray(operand) ? operand[0] ?? '' : operand ?? '';
-    return `<span class="arrow">→</span><select id="operand">
-      ${field.type === 'multi-value' ? '<option value="">—</option>' : ''}
+    return `<span class="arrow" aria-hidden="true">→</span><select id="operand" aria-label="Value">
       ${opts.map(o => `<option value="${o}" ${String(o) === String(val) ? 'selected' : ''}>${o}</option>`).join('')}
     </select>`;
   }
