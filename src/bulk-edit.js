@@ -5,7 +5,7 @@
 // the model is wrong — there is no second place for it to go wrong.
 
 import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, groupByTransition,
-         reconcile, retryScope, describeResult } from './model.js?v=1787287863';
+         reconcile, retryScope, describeResult } from './model.js?v=1787394900';
 
 const CSS = `
 :host { display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:#1a1a1a; }
@@ -53,7 +53,10 @@ select, input[type=text] { border:1px solid #b8b8b8; background:#fff; padding:6p
   background:#fff; border:1px solid #b8b8b8; box-shadow:0 3px 10px #0002; padding:5px 0; }
 .mrow { display:flex; align-items:center; gap:8px; padding:5px 11px; font-size:13px; cursor:pointer; }
 .mrow:hover { background:#f4f6fb; }
-.addop { margin-top:7px; font-size:12.5px; color:#666; background:none; border:0; padding:0; cursor:pointer; font-family:inherit; }
+.addop { margin-top:7px; font-size:12.5px; color:#aaa; background:none; border:0; padding:0; font-family:inherit;
+  cursor:default; display:inline-flex; align-items:center; gap:7px; }
+.addop .soon { font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:#999;
+  border:1px dashed #cfcfcf; padding:1px 6px; }
 .ghead { width:100%; text-align:left; background:none; border:0; font:inherit; }
 .ghead:focus-visible, .chip:focus-visible, .go-edit:focus-visible, .apply:focus-visible,
 input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:2px solid #1a5fb4; outline-offset:1px; }
@@ -397,7 +400,10 @@ export class BulkEdit extends HTMLElement {
         <div class="context">${this.#distHTML(current, field)}</div>
         <div class="summary" role="status" aria-live="polite">${this.#needsValue(field, s) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
         ${destructive && p.counts.changing ? `<div class="warn">${METHOD_LABEL[s.method]} discards values that are not shown anywhere else.</div>` : ''}
-        <button class="addop" type="button">+ Add another operation</button>
+        <button class="addop" type="button" disabled
+          title="Not built yet. Composing several operations into one commit changes how the diff can be grouped — a host would sit in one group per field instead of one group overall — so it is being designed rather than bolted on.">
+          + Add another operation <span class="soon">not yet</span>
+        </button>
       </div>
 
       ${this.#phaseHTML(p)}
