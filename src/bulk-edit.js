@@ -5,7 +5,7 @@
 // the model is wrong — there is no second place for it to go wrong.
 
 import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, groupByTransition,
-         reconcile, retryScope, describeResult } from './model.js?v=1787394900';
+         reconcile, retryScope, describeResult } from './model.js?v=1787568308';
 
 const CSS = `
 :host { display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:#1a1a1a; }
@@ -252,7 +252,11 @@ export class BulkEdit extends HTMLElement {
     this.shadowRoot.addEventListener('click', e => this.#onClick(e));
     this.shadowRoot.addEventListener('change', e => this.#onChange(e));
     this.shadowRoot.addEventListener('input', e => this.#onInput(e));
-    if (this.items) this.#render();
+    // `this.all` and not `this.items` — the items getter filters `all`, so asking
+    // it whether data has arrived throws before it ever has. An exception thrown
+    // in a custom element callback is reported and swallowed rather than raised
+    // to the caller, so this failed silently on every upgrade.
+    if (this.all) this.#render();
   }
 
   #onChange(e) {
@@ -401,7 +405,7 @@ export class BulkEdit extends HTMLElement {
         <div class="summary" role="status" aria-live="polite">${this.#needsValue(field, s) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
         ${destructive && p.counts.changing ? `<div class="warn">${METHOD_LABEL[s.method]} discards values that are not shown anywhere else.</div>` : ''}
         <button class="addop" type="button" disabled
-          title="Not built yet. Composing several operations into one commit changes how the diff can be grouped — a host would sit in one group per field instead of one group overall — so it is being designed rather than bolted on.">
+          title="The model handles this — planBatch() reduces a list of operations to the shortest one with the same outcome, so two operations on the same field become a sentence the operator recognises rather than a conflict to resolve. The interface for it is not built yet.">
           + Add another operation <span class="soon">not yet</span>
         </button>
       </div>
