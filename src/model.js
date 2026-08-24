@@ -293,3 +293,132 @@ export function describeResult(result) {
   const tail = excluded ? ` · ${excluded} were excluded` : '';
   return `${succeeded} of ${attempted} updated · ${failed} failed${tail}`;
 }
+
+/* ---------------- several operations, committed together ---------------- */
+
+/**
+ * Run a list of operations over one item, in order, recording each step.
+ * Operations only ever write their own field, so the record is threaded
+ * through and each step sees whatever the steps before it left behind.
+ */
+function runPipeline(item, ops) {
+  const rec = { ...item };
+  const trail = ops.map(op => {
+    const before = rec[op.field.key];
+    const after = applyTo(before, op.field, op.method, op.operand);
+    rec[op.field.key] = after;
+    return { before, after, moved: !same(before, after) };
+  });
+  return { rec, trail };
+}
+
+const touchedKeys = ops => [...new Set(ops.map(op => op.field.key))];
+
+const sameOn = (a, b, keys) => keys.every(k => same(a[k], b[k]));
+
+/**
+ * Several operations, previewed as one commit.
+ *
+ * plan() already answers "what does this operation do". The question that only
+ * shows up with more than one is "which of these operations turns out to do
+ * nothing" — and that is not a property of the operation list.
+ *
+ * `add tag pci` followed by `remove tag pci` is a dead first operation on a host
+ * that already had the tag (the add was a no-op) and also a dead first operation
+ * on one that did not (the remove undid it) — but for different reasons, and the
+ * reasons are worth telling apart. Change the pair to `add pci` + `add monitored`
+ * and both survive. Same shape of question, three different answers, decided by
+ * the data rather than the operations.
+ *
+ * So the test is counterfactual: drop operation i, run the rest, and compare the
+ * fields anything touched. If the outcome is identical, operation i did not
+ * matter for this item. That is exact everywhere, including the case that trips
+ * up an ordering rule — `+30` then `-30`, where the first operation IS
+ * load-bearing (drop it and the result moves) even though the net is zero.
+ *
+ * Nothing here needs a conflict policy. There is no ordering to choose and
+ * nothing to block. There is only a fact to report: this operation is dead, for
+ * these items, for this reason.
+ */
+export function planBatch(items, ops, excluded = []) {
+  const skip = excluded instanceof Set ? excluded : new Set(excluded);
+  const keys = touchedKeys(ops);
+
+  // For each operation, the pipeline with that operation removed — computed once,
+  // not per item, because the operation list is the same for every item.
+  const without = ops.map((_, i) => ops.filter((_, j) => j !== i));
+
+  const rows = items.map(item => {
+    const { rec, trail } = runPipeline(item, ops);
+
+    const steps = trail.map((step, i) => {
+      // Did dropping this operation change where the item ended up?
+      const counterfactual = runPipeline(item, without[i]).rec;
+      const matters = !sameOn(rec, counterfactual, keys);
+      return {
+        op: i,
+        before: step.before,
+        after: step.after,
+        moved: step.moved,          // did it change the value at its own step
+        matters,                    // did that change survive to the end
+        // A step that never moved was already satisfied — the existing
+        // "already matches" case, and not a conflict with anything.
+        // A step that moved and then stopped mattering was overwritten.
+        dead: !matters,
+        reason: matters ? null : step.moved ? 'superseded' : 'already-matched',
+      };
+    });
+
+    const isExcluded = skip.has(item.id);
+    const wouldChange = !sameOn(item, rec, keys);
+
+    return {
+      id: item.id, item, after: rec, steps,
+      wouldChange,
+      excluded: isExcluded,
+      changes: wouldChange && !isExcluded,
+      state: !wouldChange ? 'unchanged' : isExcluded ? 'excluded' : 'changing',
+    };
+  });
+
+  const changing  = rows.filter(r => r.state === 'changing');
+  const skipped   = rows.filter(r => r.state === 'excluded');
+  const unchanged = rows.filter(r => r.state === 'unchanged');
+
+  // Per-operation rollup, counted over the items the commit will actually touch.
+  // An operation dead on every one of them is dead work the operator built by
+  // hand, and saying so is the entire point.
+  const live = rows.filter(r => !r.excluded);
+  const opReport = ops.map((op, i) => {
+    const mine = live.map(r => r.steps[i]);
+    const contributes = mine.filter(s => s.matters).length;
+    const superseded  = mine.filter(s => s.reason === 'superseded').length;
+    const matched     = mine.filter(s => s.reason === 'already-matched').length;
+    const later = ops
+      .map((o, j) => ({ o, j }))
+      .filter(({ o, j }) => j > i && o.field.key === op.field.key)
+      .map(({ j }) => j);
+    return {
+      index: i, ...op,
+      contributes, superseded, alreadyMatched: matched,
+      total: mine.length,
+      dead: contributes === 0 && mine.length > 0,
+      supersededBy: superseded > 0 ? later : [],
+      destructive: DESTRUCTIVE.has(op.method),
+    };
+  });
+
+  return {
+    rows, ops: opReport, changing, excluded: skipped, unchanged,
+    counts: {
+      total: rows.length,
+      changing: changing.length,
+      excluded: skipped.length,
+      unchanged: unchanged.length,
+    },
+    // Operations that do nothing at all. Not an error and not something to
+    // block — the operator may be mid-edit. It is a fact the preview owes them.
+    dead: opReport.filter(o => o.dead),
+    destructive: opReport.some(o => o.destructive && o.contributes > 0),
+  };
+}

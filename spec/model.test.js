@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarise, methodsFor, plan, describe, groupByTransition, reconcile, retryScope, describeResult, DESTRUCTIVE } from '../src/model.js';
+import { summarise, methodsFor, plan, planBatch, describe, groupByTransition, reconcile, retryScope, describeResult, DESTRUCTIVE } from '../src/model.js';
 
 const F = {
   env:  { key: 'environment', type: 'single-select', options: ['Production', 'Staging'] },
@@ -360,4 +360,126 @@ test('a retry of a retry converges', () => {
   const third = reconcile(plan(retryScope(second), F.env, 'set', 'prod'), []);
   assert.equal(describeResult(third), '1 updated');
   assert.equal(third.complete, true);
+});
+
+/* ---------------- planBatch — several operations, one commit ---------------- */
+//
+// These are the cases that decide whether "what happens when two operations
+// touch the same field" needs a policy. It does not. It needs the plan.
+
+const op = (field, method, operand) => ({ field, method, operand });
+
+test('operations on different fields both contribute', () => {
+  const b = planBatch(mk({ environment: 'Staging', retentionDays: 30 }),
+    [op(F.env, 'set', 'Production'), op(F.ret, 'increaseBy', 30)]);
+  assert.deepEqual(b.ops.map(o => o.contributes), [1, 1]);
+  assert.equal(b.dead.length, 0);
+  assert.equal(b.rows[0].after.environment, 'Production');
+  assert.equal(b.rows[0].after.retentionDays, 60);
+});
+
+test('two absolute writes to one field — the first is dead, and named as superseded', () => {
+  const b = planBatch(mk({ environment: 'Development' }),
+    [op(F.env, 'set', 'Production'), op(F.env, 'set', 'Staging')]);
+  assert.equal(b.ops[0].dead, true);
+  assert.equal(b.ops[0].superseded, 1);
+  assert.deepEqual(b.ops[0].supersededBy, [1]);
+  assert.equal(b.ops[1].contributes, 1);
+  assert.equal(b.rows[0].after.environment, 'Staging');
+});
+
+test('add then clear — the add is dead work', () => {
+  const b = planBatch(mk({ tags: ['web'] }),
+    [op(F.tags, 'add', 'pci'), op(F.tags, 'clear', null)]);
+  assert.equal(b.ops[0].dead, true);
+  assert.equal(b.rows[0].steps[0].reason, 'superseded');
+  assert.deepEqual(b.rows[0].after.tags, []);
+});
+
+// The case no static policy can classify: one pair of operations, two hosts,
+// the same operation dead on both — for two different reasons.
+test('add then remove is dead on every host, but not for the same reason', () => {
+  const b = planBatch(mk({ tags: ['pci'] }, { tags: [] }),
+    [op(F.tags, 'add', 'pci'), op(F.tags, 'remove', 'pci')]);
+
+  assert.equal(b.ops[0].dead, true, 'the add never survives');
+  assert.equal(b.ops[0].contributes, 0);
+  assert.equal(b.ops[0].alreadyMatched, 1, 'host that already had the tag');
+  assert.equal(b.ops[0].superseded, 1, 'host where the remove undid it');
+
+  assert.equal(b.rows[0].steps[0].reason, 'already-matched');
+  assert.equal(b.rows[1].steps[0].reason, 'superseded');
+
+  // The remove matters on both — on the second host it is only cleaning up after
+  // the dead add, but drop it and the answer moves, so it is still load-bearing.
+  assert.equal(b.ops[1].contributes, 2);
+});
+
+test('the same pair with different operands composes and nothing is dead', () => {
+  const b = planBatch(mk({ tags: [] }),
+    [op(F.tags, 'add', 'pci'), op(F.tags, 'add', 'monitored')]);
+  assert.equal(b.dead.length, 0);
+  assert.deepEqual(b.rows[0].after.tags, ['monitored', 'pci']);
+});
+
+// An ordering rule reads "+30 then -30" as the second overwriting the first.
+// It does not. Drop either one and the answer moves, so both are load-bearing —
+// even though the item ends up exactly where it started.
+test('increase then decrease — net zero, but both operations matter', () => {
+  const b = planBatch(mk({ retentionDays: 60 }),
+    [op(F.ret, 'increaseBy', 30), op(F.ret, 'decreaseBy', 30)]);
+  assert.deepEqual(b.ops.map(o => o.contributes), [1, 1]);
+  assert.equal(b.dead.length, 0);
+  assert.equal(b.rows[0].after.retentionDays, 60);
+  assert.equal(b.rows[0].state, 'unchanged', 'the batch is a no-op and says so');
+  assert.equal(b.counts.changing, 0);
+});
+
+test('relative operations compose', () => {
+  const b = planBatch(mk({ retentionDays: 60 }),
+    [op(F.ret, 'increaseBy', 30), op(F.ret, 'increaseBy', 10)]);
+  assert.equal(b.rows[0].after.retentionDays, 100);
+  assert.equal(b.dead.length, 0);
+});
+
+test('relative then absolute kills the relative; absolute then relative does not', () => {
+  const killed = planBatch(mk({ retentionDays: 60 }),
+    [op(F.ret, 'increaseBy', 30), op(F.ret, 'set', 90)]);
+  assert.equal(killed.ops[0].dead, true);
+  assert.equal(killed.rows[0].after.retentionDays, 90);
+
+  const kept = planBatch(mk({ retentionDays: 60 }),
+    [op(F.ret, 'set', 90), op(F.ret, 'increaseBy', 30)]);
+  assert.equal(kept.dead.length, 0);
+  assert.equal(kept.rows[0].after.retentionDays, 120);
+});
+
+test('an excluded item is left out of the per-operation rollup', () => {
+  const items = mk({ environment: 'Staging' }, { environment: 'Staging' });
+  const b = planBatch(items, [op(F.env, 'set', 'Production')], [items[1].id]);
+  assert.equal(b.counts.changing, 1);
+  assert.equal(b.counts.excluded, 1);
+  assert.equal(b.ops[0].total, 1, 'rolled up over what will actually be committed');
+  assert.equal(b.ops[0].contributes, 1);
+});
+
+test('a destructive operation that gets superseded is not reported as destructive', () => {
+  const b = planBatch(mk({ tags: ['web'] }),
+    [op(F.tags, 'clear', null), op(F.tags, 'replace', ['pci'])]);
+  assert.equal(b.ops[0].dead, true, 'the clear is erased by the replace');
+  assert.equal(b.ops[0].destructive, true, 'it is still a destructive verb');
+  assert.equal(b.destructive, true, 'because the replace still destroys');
+
+  const harmless = planBatch(mk({ tags: [] }), [op(F.tags, 'clear', null)]);
+  assert.equal(harmless.destructive, false, 'nothing to destroy');
+});
+
+test('batch state agrees with counts and never double-counts a row', () => {
+  const items = mk({ environment: 'Staging' }, { environment: 'Production' }, { environment: 'Staging' });
+  const b = planBatch(items, [op(F.env, 'set', 'Production')], [items[2].id]);
+  const { total, changing, excluded, unchanged } = b.counts;
+  assert.equal(changing + excluded + unchanged, total);
+  assert.equal(changing, 1);
+  assert.equal(unchanged, 1);
+  assert.equal(excluded, 1);
 });
