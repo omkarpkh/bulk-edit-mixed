@@ -317,63 +317,63 @@ const touchedKeys = ops => [...new Set(ops.map(op => op.field.key))];
 const sameOn = (a, b, keys) => keys.every(k => same(a[k], b[k]));
 
 /**
+ * Reduce a batch to the shortest list of operations with the same outcome.
+ *
+ * Walks first to last, dropping any operation the outcome does not depend on,
+ * and — this is the part that matters — commits each drop before testing the
+ * next. Two operations can each be removable alone but not together: `+30` then
+ * `set 90` against a host at 60, or the same `add` written twice. Testing them
+ * independently calls both redundant and reduces a working batch to nothing.
+ * Dropping as it goes means the first one goes and the second becomes
+ * load-bearing, which is the truth.
+ *
+ * First to last rather than last to first, because when either could be kept the
+ * later one is what the operator wrote last, and the one they will recognise.
+ */
+function reduceOps(items, ops) {
+  const keys = touchedKeys(ops);
+  const finals = items.map(i => runPipeline(i, ops).rec);
+  let kept = ops.map((_, i) => i);
+
+  for (let i = 0; i < ops.length; i++) {
+    if (!kept.includes(i)) continue;
+    const trial = kept.filter(j => j !== i);
+    const list = trial.map(j => ops[j]);
+    const unchanged = items.every((item, n) => sameOn(runPipeline(item, list).rec, finals[n], keys));
+    if (unchanged) kept = trial;
+  }
+  return kept;
+}
+
+/**
  * Several operations, previewed as one commit.
  *
  * plan() already answers "what does this operation do". The question that only
- * shows up with more than one is "which of these operations turns out to do
- * nothing" — and that is not a property of the operation list.
+ * shows up with more than one is what to say when two of them touch one field —
+ * and the usual answers (block it, take the last write, make the operator
+ * resolve it) all assume the answer can be read off the operation list.
  *
- * `add tag pci` followed by `remove tag pci` is a dead first operation on a host
- * that already had the tag (the add was a no-op) and also a dead first operation
- * on one that did not (the remove undid it) — but for different reasons, and the
- * reasons are worth telling apart. Change the pair to `add pci` + `add monitored`
- * and both survive. Same shape of question, three different answers, decided by
- * the data rather than the operations.
+ * It cannot. `add tag pci` then `remove tag pci` against two hosts leaves the
+ * add doing nothing on both — but on the host that already carried the tag it
+ * was a no-op, and on the host that did not the remove undid it. Same pair, two
+ * reasons, decided by the data. Change the second operand and both survive.
  *
- * So the test is counterfactual: drop operation i, run the rest, and compare the
- * fields anything touched. If the outcome is identical, operation i did not
- * matter for this item. That is exact everywhere, including the case that trips
- * up an ordering rule — `+30` then `-30`, where the first operation IS
- * load-bearing (drop it and the result moves) even though the net is zero.
- *
- * Nothing here needs a conflict policy. There is no ordering to choose and
- * nothing to block. There is only a fact to report: this operation is dead, for
- * these items, for this reason.
+ * So the batch is reduced instead of judged: what is the shortest list of
+ * operations with this exact outcome? Nothing is blocked, no ordering is chosen,
+ * and there is no conflict to resolve — only a shorter sentence to show the
+ * operator, in the vocabulary they already used. See describeBatch().
  */
 export function planBatch(items, ops, excluded = []) {
   const skip = excluded instanceof Set ? excluded : new Set(excluded);
   const keys = touchedKeys(ops);
 
-  // For each operation, the pipeline with that operation removed — computed once,
-  // not per item, because the operation list is the same for every item.
-  const without = ops.map((_, i) => ops.filter((_, j) => j !== i));
-
   const rows = items.map(item => {
     const { rec, trail } = runPipeline(item, ops);
-
-    const steps = trail.map((step, i) => {
-      // Did dropping this operation change where the item ended up?
-      const counterfactual = runPipeline(item, without[i]).rec;
-      const matters = !sameOn(rec, counterfactual, keys);
-      return {
-        op: i,
-        before: step.before,
-        after: step.after,
-        moved: step.moved,          // did it change the value at its own step
-        matters,                    // did that change survive to the end
-        // A step that never moved was already satisfied — the existing
-        // "already matches" case, and not a conflict with anything.
-        // A step that moved and then stopped mattering was overwritten.
-        dead: !matters,
-        reason: matters ? null : step.moved ? 'superseded' : 'already-matched',
-      };
-    });
-
     const isExcluded = skip.has(item.id);
     const wouldChange = !sameOn(item, rec, keys);
-
     return {
-      id: item.id, item, after: rec, steps,
+      id: item.id, item, after: rec,
+      steps: trail.map((s, i) => ({ op: i, before: s.before, after: s.after, moved: s.moved })),
       wouldChange,
       excluded: isExcluded,
       changes: wouldChange && !isExcluded,
@@ -385,28 +385,36 @@ export function planBatch(items, ops, excluded = []) {
   const skipped   = rows.filter(r => r.state === 'excluded');
   const unchanged = rows.filter(r => r.state === 'unchanged');
 
-  // Per-operation rollup, counted over the items the commit will actually touch.
-  // An operation dead on every one of them is dead work the operator built by
-  // hand, and saying so is the entire point.
+  // Reduction is computed over the rows that will actually be committed —
+  // an excluded host cannot make an operation necessary.
   const live = rows.filter(r => !r.excluded);
+  const kept = new Set(reduceOps(live.map(r => r.item), ops));
+
   const opReport = ops.map((op, i) => {
     const mine = live.map(r => r.steps[i]);
-    const contributes = mine.filter(s => s.matters).length;
-    const superseded  = mine.filter(s => s.reason === 'superseded').length;
-    const matched     = mine.filter(s => s.reason === 'already-matched').length;
+    const dead = !kept.has(i);
+    // For an operation the outcome does not depend on, every host's story is
+    // one of two: there was nothing to do, or what it did was undone later.
+    const moved = mine.filter(s => s.moved).length;
+    const still = mine.length - moved;
     const later = ops
       .map((o, j) => ({ o, j }))
-      .filter(({ o, j }) => j > i && o.field.key === op.field.key)
+      .filter(({ o, j }) => j > i && o.field.key === op.field.key && kept.has(j))
       .map(({ j }) => j);
     return {
       index: i, ...op,
-      contributes, superseded, alreadyMatched: matched,
+      dead,
       total: mine.length,
-      dead: contributes === 0 && mine.length > 0,
-      supersededBy: superseded > 0 ? later : [],
+      // `alreadyMatched` is honest no-op reporting and stays meaningful for a
+      // live operation too — "153 of 200 already have this tag".
+      alreadyMatched: still,
+      superseded: dead ? moved : 0,
+      supersededBy: dead && moved ? later : [],
       destructive: DESTRUCTIVE.has(op.method),
     };
   });
+
+  const keptOps = opReport.filter(o => !o.dead);
 
   return {
     rows, ops: opReport, changing, excluded: skipped, unchanged,
@@ -416,9 +424,78 @@ export function planBatch(items, ops, excluded = []) {
       excluded: skipped.length,
       unchanged: unchanged.length,
     },
-    // Operations that do nothing at all. Not an error and not something to
-    // block — the operator may be mid-edit. It is a fact the preview owes them.
+    // The equivalent shorter batch, and what fell out of it.
+    reduced: keptOps,
     dead: opReport.filter(o => o.dead),
-    destructive: opReport.some(o => o.destructive && o.contributes > 0),
+    destructive: keptOps.some(o => o.destructive) && changing.length > 0,
+  };
+}
+
+/* ---------------- saying it in the operator's own terms ---------------- */
+
+const list = v => (Array.isArray(v) ? v : v == null ? [] : [v]).join(', ');
+
+/** One operation as a sentence a person would say out loud. */
+export function phraseOp({ field, method, operand }) {
+  const name = field.label ?? field.key;
+  const n = v => `${v}${field.unit ?? ''}`;
+  switch (method) {
+    case 'set':        return `Set ${name} to ${n(operand)}`;
+    case 'increaseBy': return `Increase ${name} by ${n(operand)}`;
+    case 'decreaseBy': return `Decrease ${name} by ${n(operand)}`;
+    case 'enable':     return `Enable ${name}`;
+    case 'disable':    return `Disable ${name}`;
+    case 'add':        return `Add ${list(operand)} to ${name}`;
+    case 'remove':     return `Remove ${list(operand)} from ${name}`;
+    case 'replace':    return `Replace ${name} with ${list(operand)}`;
+    case 'clear':      return `Clear all ${name}`;
+    default:           return `${method} ${name}`;
+  }
+}
+
+/**
+ * What to actually tell the operator when an operation turns out to do nothing.
+ *
+ * Not "operation 1 is dead", and not "conflict" — both of those sound like the
+ * system refused to run it, and the operator's mental model is correct: the
+ * operations DO run, in the order they were written. Arguing with that is how a
+ * warning gets ignored.
+ *
+ * So state the outcome instead of judging the input. Add pci then Remove pci is
+ * not a batch that does nothing — on a host that already carried the tag the add
+ * is a no-op and the remove takes it off, so the host changes. The batch is
+ * exactly equal to Remove pci, and that is the useful thing to say:
+ *
+ *     This is the same as: Remove pci from Tags
+ *
+ * The operator recognises that sentence, because it is one they could have
+ * written. Nothing is blocked and nothing is accused.
+ */
+export function describeBatch(batch) {
+  const dead = batch.ops.filter(o => o.dead);
+  const reduced = batch.ops.filter(o => !o.dead);
+
+  // Nothing to reduce, or the whole batch is a no-op — the counts already say so.
+  if (!dead.length || !reduced.length || batch.counts.changing === 0) {
+    return { reducible: false, equivalent: null, reduced: batch.ops, notes: [] };
+  }
+
+  const notes = dead.map(o => {
+    const by = o.supersededBy.map(j => phraseOp(batch.ops[j])).join(' and ')
+      || 'a later operation';
+    // "already match" deliberately reuses the vocabulary describe() already
+    // uses for no-ops, so the operator is not learning a second word for it.
+    const why = o.alreadyMatched && o.superseded
+      ? `${o.alreadyMatched} already match, and ${by} undoes it on the other ${o.superseded}`
+      : o.superseded ? `${by} undoes it`
+      : `all ${o.total} already match`;
+    return { index: o.index, text: `${phraseOp(o)} changes nothing — ${why}` };
+  });
+
+  return {
+    reducible: true,
+    equivalent: reduced.map(phraseOp).join(', then '),
+    reduced,
+    notes,
   };
 }

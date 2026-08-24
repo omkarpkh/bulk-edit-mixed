@@ -4,13 +4,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarise, methodsFor, plan, planBatch, describe, groupByTransition, reconcile, retryScope, describeResult, DESTRUCTIVE } from '../src/model.js';
+import { summarise, methodsFor, plan, planBatch, describeBatch, phraseOp, describe, groupByTransition, reconcile, retryScope, describeResult, DESTRUCTIVE } from '../src/model.js';
 
 const F = {
-  env:  { key: 'environment', type: 'single-select', options: ['Production', 'Staging'] },
-  tags: { key: 'tags', type: 'multi-value' },
-  mon:  { key: 'monitoring', type: 'boolean' },
-  ret:  { key: 'retentionDays', type: 'number', min: 1, max: 365 },
+  env:  { key: 'environment',   label: 'Environment',   type: 'single-select', options: ['Production', 'Staging'] },
+  tags: { key: 'tags',          label: 'Tags',          type: 'multi-value' },
+  mon:  { key: 'monitoring',    label: 'Monitoring',    type: 'boolean' },
+  ret:  { key: 'retentionDays', label: 'Log retention', type: 'number', min: 1, max: 365, unit: 'd' },
 };
 
 const mk = (...vals) => vals.map((v, i) => ({ id: `i${i}`, ...v }));
@@ -369,53 +369,51 @@ test('a retry of a retry converges', () => {
 
 const op = (field, method, operand) => ({ field, method, operand });
 
-test('operations on different fields both contribute', () => {
+test('operations on different fields all survive the reduction', () => {
   const b = planBatch(mk({ environment: 'Staging', retentionDays: 30 }),
     [op(F.env, 'set', 'Production'), op(F.ret, 'increaseBy', 30)]);
-  assert.deepEqual(b.ops.map(o => o.contributes), [1, 1]);
   assert.equal(b.dead.length, 0);
+  assert.equal(b.reduced.length, 2);
   assert.equal(b.rows[0].after.environment, 'Production');
   assert.equal(b.rows[0].after.retentionDays, 60);
 });
 
-test('two absolute writes to one field — the first is dead, and named as superseded', () => {
+test('two absolute writes to one field — the first drops out, and says why', () => {
   const b = planBatch(mk({ environment: 'Development' }),
     [op(F.env, 'set', 'Production'), op(F.env, 'set', 'Staging')]);
   assert.equal(b.ops[0].dead, true);
   assert.equal(b.ops[0].superseded, 1);
   assert.deepEqual(b.ops[0].supersededBy, [1]);
-  assert.equal(b.ops[1].contributes, 1);
+  assert.equal(b.ops[1].dead, false);
   assert.equal(b.rows[0].after.environment, 'Staging');
 });
 
-test('add then clear — the add is dead work', () => {
+test('add then clear — the add drops out', () => {
   const b = planBatch(mk({ tags: ['web'] }),
     [op(F.tags, 'add', 'pci'), op(F.tags, 'clear', null)]);
   assert.equal(b.ops[0].dead, true);
-  assert.equal(b.rows[0].steps[0].reason, 'superseded');
+  assert.equal(b.ops[0].superseded, 1);
   assert.deepEqual(b.rows[0].after.tags, []);
 });
 
 // The case no static policy can classify: one pair of operations, two hosts,
-// the same operation dead on both — for two different reasons.
-test('add then remove is dead on every host, but not for the same reason', () => {
+// the same operation doing nothing on both — for two different reasons.
+test('add then remove does nothing on every host, but not for the same reason', () => {
   const b = planBatch(mk({ tags: ['pci'] }, { tags: [] }),
     [op(F.tags, 'add', 'pci'), op(F.tags, 'remove', 'pci')]);
 
   assert.equal(b.ops[0].dead, true, 'the add never survives');
-  assert.equal(b.ops[0].contributes, 0);
   assert.equal(b.ops[0].alreadyMatched, 1, 'host that already had the tag');
   assert.equal(b.ops[0].superseded, 1, 'host where the remove undid it');
+  assert.equal(b.rows[0].steps[0].moved, false);
+  assert.equal(b.rows[1].steps[0].moved, true);
 
-  assert.equal(b.rows[0].steps[0].reason, 'already-matched');
-  assert.equal(b.rows[1].steps[0].reason, 'superseded');
-
-  // The remove matters on both — on the second host it is only cleaning up after
-  // the dead add, but drop it and the answer moves, so it is still load-bearing.
-  assert.equal(b.ops[1].contributes, 2);
+  // and what is left is a batch the operator would recognise
+  assert.deepEqual(b.reduced.map(o => o.index), [1]);
+  assert.equal(describeBatch(b).equivalent, 'Remove pci from Tags');
 });
 
-test('the same pair with different operands composes and nothing is dead', () => {
+test('the same pair with different operands composes and nothing drops out', () => {
   const b = planBatch(mk({ tags: [] }),
     [op(F.tags, 'add', 'pci'), op(F.tags, 'add', 'monitored')]);
   assert.equal(b.dead.length, 0);
@@ -425,10 +423,9 @@ test('the same pair with different operands composes and nothing is dead', () =>
 // An ordering rule reads "+30 then -30" as the second overwriting the first.
 // It does not. Drop either one and the answer moves, so both are load-bearing —
 // even though the item ends up exactly where it started.
-test('increase then decrease — net zero, but both operations matter', () => {
+test('increase then decrease — net zero, but both operations are load-bearing', () => {
   const b = planBatch(mk({ retentionDays: 60 }),
     [op(F.ret, 'increaseBy', 30), op(F.ret, 'decreaseBy', 30)]);
-  assert.deepEqual(b.ops.map(o => o.contributes), [1, 1]);
   assert.equal(b.dead.length, 0);
   assert.equal(b.rows[0].after.retentionDays, 60);
   assert.equal(b.rows[0].state, 'unchanged', 'the batch is a no-op and says so');
@@ -442,32 +439,45 @@ test('relative operations compose', () => {
   assert.equal(b.dead.length, 0);
 });
 
-test('relative then absolute kills the relative; absolute then relative does not', () => {
-  const killed = planBatch(mk({ retentionDays: 60 }),
+// Two operations that are each removable ALONE but not together. Testing them
+// independently calls both redundant and reduces a working batch to nothing;
+// dropping as you go keeps exactly one, and keeps the later one.
+test('mutually redundant operations do not both drop out', () => {
+  const b = planBatch(mk({ retentionDays: 60 }),
     [op(F.ret, 'increaseBy', 30), op(F.ret, 'set', 90)]);
-  assert.equal(killed.ops[0].dead, true);
-  assert.equal(killed.rows[0].after.retentionDays, 90);
-
-  const kept = planBatch(mk({ retentionDays: 60 }),
-    [op(F.ret, 'set', 90), op(F.ret, 'increaseBy', 30)]);
-  assert.equal(kept.dead.length, 0);
-  assert.equal(kept.rows[0].after.retentionDays, 120);
+  assert.equal(b.rows[0].after.retentionDays, 90);
+  assert.equal(b.reduced.length, 1, 'the batch still does something');
+  assert.deepEqual(b.reduced.map(o => o.index), [1], 'and it is the one written last');
+  assert.equal(describeBatch(b).equivalent, 'Set Log retention to 90d');
 });
 
-test('an excluded item is left out of the per-operation rollup', () => {
+test('the same operation written twice keeps one of them', () => {
+  const b = planBatch(mk({ tags: [] }),
+    [op(F.tags, 'add', 'pci'), op(F.tags, 'add', 'pci')]);
+  assert.deepEqual(b.rows[0].after.tags, ['pci']);
+  assert.deepEqual(b.reduced.map(o => o.index), [1]);
+});
+
+test('absolute then relative keeps both', () => {
+  const b = planBatch(mk({ retentionDays: 60 }),
+    [op(F.ret, 'set', 90), op(F.ret, 'increaseBy', 30)]);
+  assert.equal(b.dead.length, 0);
+  assert.equal(b.rows[0].after.retentionDays, 120);
+});
+
+test('an excluded item cannot make an operation necessary', () => {
   const items = mk({ environment: 'Staging' }, { environment: 'Staging' });
   const b = planBatch(items, [op(F.env, 'set', 'Production')], [items[1].id]);
   assert.equal(b.counts.changing, 1);
   assert.equal(b.counts.excluded, 1);
   assert.equal(b.ops[0].total, 1, 'rolled up over what will actually be committed');
-  assert.equal(b.ops[0].contributes, 1);
+  assert.equal(b.ops[0].dead, false);
 });
 
-test('a destructive operation that gets superseded is not reported as destructive', () => {
+test('a destructive operation that drops out is not reported as destructive', () => {
   const b = planBatch(mk({ tags: ['web'] }),
     [op(F.tags, 'clear', null), op(F.tags, 'replace', ['pci'])]);
   assert.equal(b.ops[0].dead, true, 'the clear is erased by the replace');
-  assert.equal(b.ops[0].destructive, true, 'it is still a destructive verb');
   assert.equal(b.destructive, true, 'because the replace still destroys');
 
   const harmless = planBatch(mk({ tags: [] }), [op(F.tags, 'clear', null)]);
@@ -482,4 +492,39 @@ test('batch state agrees with counts and never double-counts a row', () => {
   assert.equal(changing, 1);
   assert.equal(unchanged, 1);
   assert.equal(excluded, 1);
+});
+
+/* ---------------- describeBatch — what the operator is told ---------------- */
+
+test('a batch with nothing to drop is not reducible', () => {
+  const b = planBatch(mk({ tags: [] }), [op(F.tags, 'add', 'pci'), op(F.tags, 'add', 'monitored')]);
+  const d = describeBatch(b);
+  assert.equal(d.reducible, false);
+  assert.equal(d.equivalent, null);
+});
+
+test('the explanation names the later operation rather than blaming the earlier one', () => {
+  const b = planBatch(mk({ environment: 'Development' }),
+    [op(F.env, 'set', 'Production'), op(F.env, 'set', 'Staging')]);
+  const d = describeBatch(b);
+  assert.equal(d.equivalent, 'Set Environment to Staging');
+  assert.match(d.notes[0].text, /Set Environment to Staging undoes it/);
+  assert.doesNotMatch(d.notes[0].text, /conflict|error|invalid/i);
+});
+
+test('a mixed batch reports both reasons with their own numbers', () => {
+  const items = [
+    ...Array.from({ length: 3 }, (_, i) => ({ id: `has${i}`, tags: ['pci'] })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: `not${i}`, tags: [] })),
+  ];
+  const d = describeBatch(planBatch(items, [op(F.tags, 'add', 'pci'), op(F.tags, 'remove', 'pci')]));
+  assert.equal(d.equivalent, 'Remove pci from Tags');
+  assert.match(d.notes[0].text, /3 already match/);
+  assert.match(d.notes[0].text, /undoes it on the other 2/);
+});
+
+test('a batch that changes nothing says so instead of offering a shorter form', () => {
+  const b = planBatch(mk({ environment: 'Production' }), [op(F.env, 'set', 'Production')]);
+  assert.equal(b.counts.changing, 0);
+  assert.equal(describeBatch(b).reducible, false);
 });
