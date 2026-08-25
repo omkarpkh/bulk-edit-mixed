@@ -1,0 +1,679 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulk edit &mdash; three visual directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;450;500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --page:#f7f7f4; --ink:#141414; --muted:#6b6b6b; --hair:#e0e0da; --red:#b0342b; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font:15px/1.55 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:44px 24px 90px}
+  h1{font-size:clamp(24px,4vw,32px);letter-spacing:-.02em;margin:0 0 10px;font-weight:600}
+  .sub{color:var(--muted);max-width:64ch;margin:0 0 12px}
+  .note{color:var(--muted);font-size:13.5px;max-width:70ch;margin:0 0 8px}
+  .kick{font:600 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--red)}
+
+  .ctrl{position:sticky;top:0;z-index:30;background:rgba(247,247,244,.94);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--hair);margin:26px -24px 0;padding:12px 24px;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .cl{font:600 10px/1 'IBM Plex Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+  .seg{display:flex;border:1px solid #cfd0cb;background:#fff}
+  .seg button{font:inherit;font-size:13px;padding:6px 13px;background:none;border:0;cursor:pointer;color:#4a4a4a}
+  .seg button+button{border-left:1px solid #e4e5e0}
+  .seg button[aria-pressed="true"]{background:#141414;color:#fff}
+  .hint{font-size:12.5px;color:var(--muted);flex:1 1 240px;min-width:0}
+
+  /* comparison strip — the only place that scrolls sideways, and only when it must */
+  .strip{display:flex;gap:16px;margin:20px -24px 0;padding:4px 24px 20px;
+    overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin}
+  .panel{flex:1 0 300px;min-width:300px;scroll-snap-align:start;
+    background:#fff;border:1px solid var(--hair);display:flex;flex-direction:column}
+  .ph{padding:13px 16px 11px;border-bottom:1px solid var(--hair);display:flex;
+    flex-direction:column;gap:5px}
+  .pn{font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .swipe{display:none;font-size:12px;color:var(--muted);margin:0 0 4px}
+  @media(max-width:1000px){ .swipe{display:block} }
+
+  .detail{margin-top:52px;border-top:1px solid var(--hair);padding-top:30px;scroll-margin-top:70px}
+  .dh h2{font-size:23px;font-weight:600;letter-spacing:-.015em;margin:9px 0 7px}
+  .dh .thesis{color:#3d3d3d;max-width:62ch;margin:0 0 22px;font-size:14.5px}
+  .dgrid{display:grid;grid-template-columns:352px minmax(0,1fr);gap:30px;align-items:start}
+  @media(max-width:900px){ .dgrid{grid-template-columns:1fr;gap:22px} }
+  .dspec{position:sticky;top:66px;background:#fff;border:1px solid var(--hair)}
+  @media(max-width:900px){ .dspec{position:static} }
+  .dtable{min-width:0}
+  .row{display:grid;grid-template-columns:132px minmax(0,1fr);gap:16px;
+    padding:11px 0;border-top:1px solid var(--hair)}
+  @media(max-width:560px){ .row{grid-template-columns:1fr;gap:3px} }
+  .row:first-child{border-top:0}
+  .rk{font:600 11px/1.4 'IBM Plex Mono',monospace;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--muted);padding-top:2px}
+  .rv{font-size:13.5px;max-width:62ch}
+  .rv b{font-weight:600;display:block;margin-bottom:3px}
+  .bc{display:block;color:#5a5a5a;font-size:12.5px;line-height:1.55;
+    padding-left:11px;border-left:2px solid var(--hair)}
+  .row.cost{border-top:1px dashed #c9c9c2;margin-top:6px;padding-top:14px}
+  .row.cost .rk{color:var(--red)}
+
+  .after{max-width:70ch;margin:52px 0 0;padding:22px 24px;background:#fff;border:1px solid var(--hair)}
+  .after h2{font-size:17px;margin:0 0 12px;font-weight:600}
+  .after p{font-size:13.5px;color:#3d3d3d;margin:0 0 12px;line-height:1.6}
+
+  /* the operation reads as a sentence: it wraps as a whole or not at all.
+     breaking between "Log" and "retention" is the exact failure this component argues against. */
+  .stage .op{flex-wrap:nowrap}
+  .stage .pill{white-space:nowrap}
+  @media(max-width:420px){
+    .panel{min-width:320px}
+    .stage .pill{padding-left:8px;padding-right:8px;font-size:12.5px}
+  }
+
+  .d1{--ink:#14161a;--dim:#6a7078;--hair:#dcdfe3;--signal:#1b4ed8;
+      font-family:'IBM Plex Sans',sans-serif;background:#fff;color:var(--ink)}
+  .d1 .lbl{font:500 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .d1 .op{display:flex;align-items:center;gap:7px;font-size:13px;margin:9px 0 16px;
+      padding-bottom:14px;border-bottom:1px solid var(--hair)}
+  .d1 .pill{border:1px solid var(--hair);padding:4px 9px;font-weight:500}
+  .d1 .num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;font-weight:600}
+  .d1 .bar{display:flex;height:5px;margin:12px 0 9px}
+  .d1 .leg{display:flex;flex-wrap:wrap;gap:11px;font:11px/1 'IBM Plex Mono',monospace;color:var(--dim)}
+  .d1 .leg span{display:flex;align-items:center;gap:5px}
+  .d1 .dot{width:7px;height:7px}
+  .d1 .tally{margin:17px 0 6px;font-size:13.5px;border-top:1px solid var(--hair);padding-top:14px}
+  .d1 .grp{border-top:1px solid var(--hair);padding:11px 0;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .d1 .grp.first{border-top:1px solid var(--ink)}
+  .d1 .gname{font-size:13px;font-weight:500}
+  .d1 .gname.q{color:var(--dim);font-weight:400}
+  .d1 .gcount{font-family:'IBM Plex Mono',monospace;font-size:12px;font-variant-numeric:tabular-nums;color:var(--signal)}
+  .d1 .gcount.q{color:var(--dim)}
+
+  .d2{--ink:#1c1d21;--dim:#84868f;--hair:#ececf0;--signal:#5b53e0;
+      font-family:Inter,system-ui,sans-serif;background:#fff;color:var(--ink)}
+  .d2 .lbl{font-size:11px;font-weight:500;color:var(--dim)}
+  .d2 .op{display:flex;align-items:center;gap:8px;font-size:14px;margin:11px 0 20px}
+  .d2 .pill{background:#f6f6f9;border-radius:8px;padding:7px 13px;font-weight:450}
+  .d2 .num{font-variant-numeric:tabular-nums;font-weight:600}
+  .d2 .bar{display:flex;height:8px;border-radius:99px;overflow:hidden;margin:14px 0 11px}
+  .d2 .leg{display:flex;flex-wrap:wrap;gap:13px;font-size:12px;color:var(--dim)}
+  .d2 .leg span{display:flex;align-items:center;gap:6px}
+  .d2 .dot{width:8px;height:8px;border-radius:99px}
+  .d2 .tally{margin:20px 0 14px;font-size:14px}
+  .d2 .grp{background:#fafafc;border-radius:10px;padding:13px 15px;margin-bottom:8px;
+      display:flex;justify-content:space-between;align-items:center;gap:10px;
+      box-shadow:0 1px 2px rgba(20,20,30,.04)}
+  .d2 .gname{font-size:13.5px;font-weight:500}
+  .d2 .gname.q{color:var(--dim);font-weight:400}
+  .d2 .gcount{font-size:12px;font-weight:500;color:var(--signal);background:#efeefc;border-radius:99px;padding:4px 10px}
+  .d2 .gcount.q{color:var(--dim);background:#f0f0f3}
+
+  .d3{--ink:#101318;--dim:#767f8c;--hair:#e6e9ee;--signal:#0f62d6;
+      font-family:Manrope,system-ui,sans-serif;background:#f1f3f7;color:var(--ink)}
+  .d3 .lbl{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+  .d3 .card{background:#fff;border-radius:13px;padding:15px 16px;margin-top:9px;
+      box-shadow:0 1px 1px rgba(16,19,24,.05),0 4px 14px -4px rgba(16,19,24,.12)}
+  .d3 .op{display:flex;align-items:center;gap:8px;font-size:13.5px}
+  .d3 .pill{background:linear-gradient(180deg,#fff,#f5f7fa);border:1px solid #e2e6ec;border-radius:9px;
+      padding:6px 12px;font-weight:600;box-shadow:0 1px 1px rgba(16,19,24,.04)}
+  .d3 .num{font-variant-numeric:tabular-nums;font-weight:800}
+  .d3 .bar{display:flex;height:9px;border-radius:99px;overflow:hidden;margin:15px 0 11px;
+      box-shadow:inset 0 1px 2px rgba(16,19,24,.14)}
+  .d3 .leg{display:flex;flex-wrap:wrap;gap:12px;font-size:11.5px;font-weight:600;color:var(--dim)}
+  .d3 .leg span{display:flex;align-items:center;gap:6px}
+  .d3 .dot{width:9px;height:9px;border-radius:3px}
+  .d3 .tally{margin:18px 0 13px;font-size:14px;font-weight:600}
+  .d3 .grp{border-radius:11px;padding:13px 15px;margin-bottom:9px;
+      display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .d3 .grp.a{background:#fff;box-shadow:0 1px 1px rgba(16,19,24,.05),0 6px 16px -6px rgba(15,98,214,.28);
+      border:1px solid rgba(15,98,214,.16)}
+  .d3 .grp.b{background:linear-gradient(180deg,#fffdf6,#fff9ea);border:1px solid #f0e2bd}
+  .d3 .grp.c{background:transparent;border:1px dashed #d3d9e2}
+  .d3 .gname{font-size:13.5px;font-weight:700}
+  .d3 .gname.q{color:var(--dim);font-weight:500}
+  .d3 .gcount{font-size:11.5px;font-weight:700;color:#fff;background:var(--signal);border-radius:7px;padding:4px 9px}
+  .d3 .gcount.b{background:#b8860b}
+  .d3 .gcount.q{background:transparent;color:var(--dim);font-weight:600}
+
+  .ctrl{position:sticky;top:0;z-index:20;background:rgba(247,247,244,.93);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--hair);margin:0 -28px 26px;padding:13px 28px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .ctrl .cl{font:600 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+  .seg{display:flex;border:1px solid #cfd0cb;background:#fff}
+  .seg button{font:inherit;font-size:13px;padding:7px 15px;background:none;border:0;cursor:pointer;color:#4a4a4a}
+  .seg button+button{border-left:1px solid #e4e5e0}
+  .seg button[aria-pressed="true"]{background:#141414;color:#fff}
+  .ctrl .hint{font-size:12.5px;color:var(--muted)}
+  .num,.gcount,.gname{will-change:contents}
+</style>
+
+<div class="wrap">
+  <h1>Bulk edit &mdash; three visual directions</h1>
+  <p class="sub">The same operation, the same 200 hosts, the same numbers. Only the treatment changes, so the
+  comparison is about visual language rather than content.</p>
+  <p class="note">Specimen is the signature moment: a relative numeric operation that clamps.
+  <b>Log retention &rarr; Decrease by &rarr; 7d</b> across 200 selected hosts. Every number is real output from
+  <code>model.js</code>.</p>
+
+  <div class="ctrl">
+    <span class="cl">Operand</span>
+    <span class="seg">
+      <button data-op="7" aria-pressed="true">Decrease by 7d</button>
+      <button data-op="14" aria-pressed="false">Decrease by 14d</button>
+    </span>
+    <span class="cl">Speed</span>
+    <span class="seg">
+      <button data-sp="1" aria-pressed="true">1&times;</button>
+      <button data-sp="4" aria-pressed="false">&frac14;&times;</button>
+    </span>
+    <span class="hint">The tally does not move &mdash; <b>172 &middot; 28</b> in both states. Only the groups beneath it change.</span>
+  </div>
+
+  <p class="swipe" style="margin-top:14px">Swipe the strip sideways to compare &middot; full detail for each is below.</p>
+  <div class="strip">
+    <div class="panel">
+      <div class="ph"><span class="kick">Direction 01</span><span class="pn">Instrument</span></div>
+      <div class="stage d1">
+        <div class="lbl">Operation</div>
+        <div class="op"><span class="pill">Log retention</span>&rarr;<span class="pill">Decrease by</span><span class="pill num">7d</span></div>
+        <div class="lbl">Currently</div>
+          <div class="bar">
+            <i style="width:26.5%;background:#3d5a99"></i>
+            <i style="width:22%;background:#c8912f"></i>
+            <i style="width:19%;background:#9aa1a9"></i>
+            <i style="width:18.5%;background:#5c8a63"></i>
+            <i style="width:14%;background:#8f6ba6"></i>
+          </div>
+          <div class="leg">
+            <span><i class="dot" style="background:#3d5a99"></i>90d <b class="num">53</b></span>
+            <span><i class="dot" style="background:#c8912f"></i>7d <b class="num">44</b></span>
+            <span><i class="dot" style="background:#9aa1a9"></i>14d <b class="num">38</b></span>
+            <span><i class="dot" style="background:#5c8a63"></i>30d <b class="num">37</b></span>
+            <span><i class="dot" style="background:#8f6ba6"></i>1d <b class="num">28</b></span>
+          </div>
+        <div class="tally"><b class="num">172</b> will change &middot; <b class="num">28</b> already match</div>
+        <div class="lbl" style="margin-bottom:9px">Transition groups</div>
+        <div style="margin-top:9px">
+          <div class="grp first"><span class="gname" data-label>Decrease by 7d</span><span class="gcount" data-n="128">128 will change</span></div>
+          <div class="grp"><span class="gname">clamped at 1d</span><span class="gcount" data-n="44">44 will change</span></div>
+          <div class="grp"><span class="gname q">already 1d</span><span class="gcount q">28 hosts</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span class="kick">Direction 02</span><span class="pn">Restraint</span></div>
+      <div class="stage d2">
+        <div class="lbl">Operation</div>
+        <div class="op"><span class="pill">Log retention</span>&rarr;<span class="pill">Decrease by</span><span class="pill num">7d</span></div>
+        <div class="lbl">Currently</div>
+          <div class="bar">
+            <i style="width:26.5%;background:#5b53e0"></i>
+            <i style="width:22%;background:#8f88ee"></i>
+            <i style="width:19%;background:#b5b0f4"></i>
+            <i style="width:18.5%;background:#d2cff8"></i>
+            <i style="width:14%;background:#e8e6fc"></i>
+          </div>
+          <div class="leg">
+            <span><i class="dot" style="background:#5b53e0"></i>90d <b class="num">53</b></span>
+            <span><i class="dot" style="background:#8f88ee"></i>7d <b class="num">44</b></span>
+            <span><i class="dot" style="background:#b5b0f4"></i>14d <b class="num">38</b></span>
+            <span><i class="dot" style="background:#d2cff8"></i>30d <b class="num">37</b></span>
+            <span><i class="dot" style="background:#e8e6fc"></i>1d <b class="num">28</b></span>
+          </div>
+        <div class="tally"><b class="num">172</b> will change &middot; <b class="num">28</b> already match</div>
+        <div class="lbl" style="margin-bottom:9px">Transition groups</div>
+        <div class="grp"><span class="gname" data-label>Decrease by 7d</span><span class="gcount" data-n="128">128 will change</span></div>
+        <div class="grp"><span class="gname">clamped at 1d</span><span class="gcount" data-n="44">44 will change</span></div>
+        <div class="grp q"><span class="gname q">already 1d</span><span class="gcount q">28 hosts</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span class="kick">Direction 03</span><span class="pn">Depth</span></div>
+      <div class="stage d3">
+        <div class="lbl">Operation</div>
+        <div class="card">
+          <div class="op"><span class="pill">Log retention</span>&rarr;<span class="pill">Decrease by</span><span class="pill num">7d</span></div>
+          <div class="bar">
+            <i style="width:26.5%;background:#0f62d6"></i>
+            <i style="width:22%;background:#3f88e8"></i>
+            <i style="width:19%;background:#79aef2"></i>
+            <i style="width:18.5%;background:#aecdf7"></i>
+            <i style="width:14%;background:#d8e6fb"></i>
+          </div>
+          <div class="leg">
+            <span><i class="dot" style="background:#0f62d6"></i>90d <b class="num">53</b></span>
+            <span><i class="dot" style="background:#3f88e8"></i>7d <b class="num">44</b></span>
+            <span><i class="dot" style="background:#79aef2"></i>14d <b class="num">38</b></span>
+            <span><i class="dot" style="background:#aecdf7"></i>30d <b class="num">37</b></span>
+            <span><i class="dot" style="background:#d8e6fb"></i>1d <b class="num">28</b></span>
+          </div>
+        </div>
+        <div class="tally"><b class="num">172</b> will change &middot; <b class="num">28</b> already match</div>
+        <div class="lbl" style="margin-bottom:9px">Transition groups</div>
+        <div class="grp a"><span class="gname" data-label>Decrease by 7d</span><span class="gcount" data-n="128">128 will change</span></div>
+        <div class="grp b"><span class="gname">clamped at 1d</span><span class="gcount b" data-n="44">44 will change</span></div>
+        <div class="grp c"><span class="gname q">already 1d</span><span class="gcount q">28 hosts</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="detail" id="d1">
+    <div class="dh">
+      <div class="kick">Direction 01</div>
+      <h2>Instrument</h2>
+      <p class="thesis">A precision tool, not a screen. Colour only ever encodes state &mdash; never mood.</p>
+    </div>
+    <div class="dgrid">
+      <div class="dspec">
+      <div class="stage d1">
+        <div class="lbl">Operation</div>
+        <div class="op"><span class="pill">Log retention</span>&rarr;<span class="pill">Decrease by</span><span class="pill num">7d</span></div>
+        <div class="lbl">Currently</div>
+          <div class="bar">
+            <i style="width:26.5%;background:#3d5a99"></i>
+            <i style="width:22%;background:#c8912f"></i>
+            <i style="width:19%;background:#9aa1a9"></i>
+            <i style="width:18.5%;background:#5c8a63"></i>
+            <i style="width:14%;background:#8f6ba6"></i>
+          </div>
+          <div class="leg">
+            <span><i class="dot" style="background:#3d5a99"></i>90d <b class="num">53</b></span>
+            <span><i class="dot" style="background:#c8912f"></i>7d <b class="num">44</b></span>
+            <span><i class="dot" style="background:#9aa1a9"></i>14d <b class="num">38</b></span>
+            <span><i class="dot" style="background:#5c8a63"></i>30d <b class="num">37</b></span>
+            <span><i class="dot" style="background:#8f6ba6"></i>1d <b class="num">28</b></span>
+          </div>
+        <div class="tally"><b class="num">172</b> will change &middot; <b class="num">28</b> already match</div>
+        <div class="lbl" style="margin-bottom:9px">Transition groups</div>
+        <div style="margin-top:9px">
+          <div class="grp first"><span class="gname" data-label>Decrease by 7d</span><span class="gcount" data-n="128">128 will change</span></div>
+          <div class="grp"><span class="gname">clamped at 1d</span><span class="gcount" data-n="44">44 will change</span></div>
+          <div class="grp"><span class="gname q">already 1d</span><span class="gcount q">28 hosts</span></div>
+        </div>
+      </div>
+      </div>
+      <div class="dtable">
+        <div class="row">
+          <div class="rk">Ground</div>
+          <div class="rv"><b>Pure white, no tint.</b><span class="bc">A tinted ground is a colour decision that pays for nothing. White means any tint that does appear is carrying information.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Palette</div>
+          <div class="rv"><b>Neutral chrome, one signal blue.</b><span class="bc">The content already spends five colours on the distribution. If the chrome spends colour too, the operator cannot tell which colours <i>mean</i> something.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Colour semantics</div>
+          <div class="rv"><b>Blue = will change. Grey = will not. Nothing else is coloured.</b><span class="bc">A two-value colour vocabulary can be learned in one glance and never mis-read. Every additional hue is another thing to remember.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Type</div>
+          <div class="rv"><b>IBM Plex Sans, with Plex Mono on numerals.</b><span class="bc">They are metric siblings, so a mixed line like &ldquo;128 will change&rdquo; keeps one rhythm instead of two.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Numerals</div>
+          <div class="rv"><b>Tabular, monospaced, everywhere.</b><span class="bc">128 and 44 occupy the same column width, so a stack of counts is comparable without being read. Scanning has to be pre-attentive.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Type scale</div>
+          <div class="rv"><b>9.5 / 11 / 13 / 13.5px. Four steps, no more.</b><span class="bc">Four steps over a 4px grid keeps every size on the rhythm. A fifth step would need a reason and there isn't one.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Hierarchy</div>
+          <div class="rv"><b>Carried by rule weight and letterspacing, not size.</b><span class="bc">Sizes stay close so the eye is not dragged around; a 1px rule against a 2px rule is enough to say &ldquo;new section&rdquo;.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Spacing</div>
+          <div class="rv"><b>4px base unit. Dense.</b><span class="bc">This is a review surface. More rows in a screen means fewer scroll events, and scrolling is where review turns into skimming.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Separation</div>
+          <div class="rv"><b>Hairlines only, #dcdfe3.</b><span class="bc">Space costs vertical room and fill costs colour. A rule costs one pixel and separates absolutely.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Radii</div>
+          <div class="rv"><b>0. Everything is square.</b><span class="bc">A radius is a softening gesture. Nothing here wants to be softer than it is.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Elevation</div>
+          <div class="rv"><b>None.</b><span class="bc">Elevation asserts a z-order. Nothing floats above anything else — it is one plane of data.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Motion · timing</div>
+          <div class="rv"><b>150ms, linear.</b><span class="bc">Under ~100ms reads as instant and breaks object continuity; over ~200ms reads as animation. Linear because the digit is the subject, not the curve.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Motion · what moves</div>
+          <div class="rv"><b>The digits count. Nothing else.</b><span class="bc">The distribution did not change, so it must not move. Animating unchanged things asserts a change that did not happen.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Reduced motion</div>
+          <div class="rv"><b>Value swaps instantly. No fallback needed.</b><span class="bc">The design never depended on the transition, so removing it removes nothing.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">State encoding</div>
+          <div class="rv"><b>Position and colour. Changing rows sit above unchanged ones, greyed.</b><span class="bc">Order encodes importance for free, before any colour is read.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Contrast</div>
+          <div class="rv"><b>Ink #14161a on white = 16.1:1. Signal blue #1b4ed8 = 8.6:1.</b><span class="bc">Both clear AAA. A language built on hairlines and small type has no contrast budget to spend.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Dark mode</div>
+          <div class="rv"><b>Survives inversion cleanly.</b><span class="bc">Nothing depends on a light ground — hairlines and one signal hue invert without redesign.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">At 12 groups</div>
+          <div class="rv"><b>Holds. Rows are 34px, so twelve fit in one screen.</b><span class="bc">Density was chosen for this case, not the demo case.</span></div>
+        </div>
+        <div class="row cost">
+          <div class="rk">Costs you</div>
+          <div class="rv">Reads cold unless the typography carries the warmth. And as drawn it does <b>not</b> distinguish <i>clamped</i> from a clean decrease &mdash; its palette breaks its own &ldquo;colour only encodes&rdquo; rule by treating an ordinal scale as categorical.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="detail" id="d2">
+    <div class="dh">
+      <div class="kick">Direction 02</div>
+      <h2>Restraint</h2>
+      <p class="thesis">The current consensus for good enterprise software. Correct to every reviewer on earth.</p>
+    </div>
+    <div class="dgrid">
+      <div class="dspec">
+      <div class="stage d2">
+        <div class="lbl">Operation</div>
+        <div class="op"><span class="pill">Log retention</span>&rarr;<span class="pill">Decrease by</span><span class="pill num">7d</span></div>
+        <div class="lbl">Currently</div>
+          <div class="bar">
+            <i style="width:26.5%;background:#5b53e0"></i>
+            <i style="width:22%;background:#8f88ee"></i>
+            <i style="width:19%;background:#b5b0f4"></i>
+            <i style="width:18.5%;background:#d2cff8"></i>
+            <i style="width:14%;background:#e8e6fc"></i>
+          </div>
+          <div class="leg">
+            <span><i class="dot" style="background:#5b53e0"></i>90d <b class="num">53</b></span>
+            <span><i class="dot" style="background:#8f88ee"></i>7d <b class="num">44</b></span>
+            <span><i class="dot" style="background:#b5b0f4"></i>14d <b class="num">38</b></span>
+            <span><i class="dot" style="background:#d2cff8"></i>30d <b class="num">37</b></span>
+            <span><i class="dot" style="background:#e8e6fc"></i>1d <b class="num">28</b></span>
+          </div>
+        <div class="tally"><b class="num">172</b> will change &middot; <b class="num">28</b> already match</div>
+        <div class="lbl" style="margin-bottom:9px">Transition groups</div>
+        <div class="grp"><span class="gname" data-label>Decrease by 7d</span><span class="gcount" data-n="128">128 will change</span></div>
+        <div class="grp"><span class="gname">clamped at 1d</span><span class="gcount" data-n="44">44 will change</span></div>
+        <div class="grp q"><span class="gname q">already 1d</span><span class="gcount q">28 hosts</span></div>
+      </div>
+      </div>
+      <div class="dtable">
+        <div class="row">
+          <div class="rk">Ground</div>
+          <div class="rv"><b>White, with #fafafc group cards.</b><span class="bc">A near-white card separates without a border, which keeps the surface calm at the cost of a very small contrast step.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Palette</div>
+          <div class="rv"><b>Greyscale plus one indigo at five tints.</b><span class="bc">&#11088; Retention is <b>ordinal</b> — 1 &lt; 7 &lt; 14 &lt; 30 &lt; 90. A single-hue ramp encodes that order; five unrelated hues would render an ordered scale as unordered categories.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Colour semantics</div>
+          <div class="rv"><b>Indigo = the accent. Tints = magnitude. Grey = inactive.</b><span class="bc">One hue doing three jobs by intensity. Cheap to learn, but it cannot express a categorical difference — see the cost.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Type</div>
+          <div class="rv"><b>Inter throughout.</b><span class="bc">True tabular figures, wide weight range, and the least surprising choice available — which is the thesis, not a compromise.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Numerals</div>
+          <div class="rv"><b>Tabular, proportional face.</b><span class="bc">Keeps digit alignment without committing to a monospaced voice, which would pull toward Direction 01.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Type scale</div>
+          <div class="rv"><b>11 / 12 / 13.5 / 14px on a 1.15 ratio.</b><span class="bc">A tight ratio at small sizes; anything wider starts to feel like a marketing page rather than a tool.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Hierarchy</div>
+          <div class="rv"><b>Weight and colour. 450 body, 500–600 for emphasis.</b><span class="bc">Inter's weight range is fine-grained enough that hierarchy never needs a size jump.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Spacing</div>
+          <div class="rv"><b>8px base. Generous.</b><span class="bc">Space is doing the separating, so it has to be large enough to read as deliberate rather than as a gap.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Separation</div>
+          <div class="rv"><b>Fill and space. No rules anywhere.</b><span class="bc">Rules would compete with the card fills; using both is how enterprise UI gets noisy.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Radii</div>
+          <div class="rv"><b>8–10px.</b><span class="bc">Large enough to read as intentional, small enough that a data table does not soften into a consumer app.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Elevation</div>
+          <div class="rv"><b>Exactly one level, 0 1px 2px at 4% black.</b><span class="bc">Multiple levels imply layers the data does not have. One says only &ldquo;this is a surface, the page is behind it&rdquo;.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Motion · timing</div>
+          <div class="rv"><b>200ms, cubic-bezier(.22,1,.36,1).</b><span class="bc">Long enough to perceive, short enough not to gate the next action. The ease-out settles rather than arrives.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Motion · what moves</div>
+          <div class="rv"><b>Count cross-fades with a 3px rise; card stays put.</b><span class="bc">Moving the card would imply the group itself changed. Only its number did.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Reduced motion</div>
+          <div class="rv"><b>Cross-fade drops to an instant swap.</b><span class="bc">The rise is decoration; the value change is the message.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">State encoding</div>
+          <div class="rv"><b>Pill colour and text weight. Unchanged rows go grey-on-grey.</b><span class="bc">Consistent with the accent system, but it renders <i>clamped</i> identically to a clean change.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Contrast</div>
+          <div class="rv"><b>Indigo #5b53e0 on #efeefc = 5.9:1. The two palest bar tints fall under 3:1.</b><span class="bc">&#9888; The bottom of the ramp fails non-text contrast. It needs a border or a pattern to stay legible.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Dark mode</div>
+          <div class="rv"><b>Needs a rebuilt ramp.</b><span class="bc">Five tints of one hue on white do not simply invert — the ordering reads backwards on a dark ground.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">At 12 groups</div>
+          <div class="rv"><b>Degrades. 62px cards mean twelve rows is two screens.</b><span class="bc">The generosity that makes three groups pleasant makes twelve a scroll.</span></div>
+        </div>
+        <div class="row cost">
+          <div class="rk">Costs you</div>
+          <div class="rv">Memorable to nobody. This is the 2026 default, and consensus aesthetics always date &mdash; they just date <i>together</i>, which is why the risk feels smaller than it is. The palest bar tints also fail non-text contrast.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="detail" id="d3">
+    <div class="dh">
+      <div class="kick">Direction 03</div>
+      <h2>Depth</h2>
+      <p class="thesis">Elevation does real work. The state model made physical.</p>
+    </div>
+    <div class="dgrid">
+      <div class="dspec">
+      <div class="stage d3">
+        <div class="lbl">Operation</div>
+        <div class="card">
+          <div class="op"><span class="pill">Log retention</span>&rarr;<span class="pill">Decrease by</span><span class="pill num">7d</span></div>
+          <div class="bar">
+            <i style="width:26.5%;background:#0f62d6"></i>
+            <i style="width:22%;background:#3f88e8"></i>
+            <i style="width:19%;background:#79aef2"></i>
+            <i style="width:18.5%;background:#aecdf7"></i>
+            <i style="width:14%;background:#d8e6fb"></i>
+          </div>
+          <div class="leg">
+            <span><i class="dot" style="background:#0f62d6"></i>90d <b class="num">53</b></span>
+            <span><i class="dot" style="background:#3f88e8"></i>7d <b class="num">44</b></span>
+            <span><i class="dot" style="background:#79aef2"></i>14d <b class="num">38</b></span>
+            <span><i class="dot" style="background:#aecdf7"></i>30d <b class="num">37</b></span>
+            <span><i class="dot" style="background:#d8e6fb"></i>1d <b class="num">28</b></span>
+          </div>
+        </div>
+        <div class="tally"><b class="num">172</b> will change &middot; <b class="num">28</b> already match</div>
+        <div class="lbl" style="margin-bottom:9px">Transition groups</div>
+        <div class="grp a"><span class="gname" data-label>Decrease by 7d</span><span class="gcount" data-n="128">128 will change</span></div>
+        <div class="grp b"><span class="gname">clamped at 1d</span><span class="gcount b" data-n="44">44 will change</span></div>
+        <div class="grp c"><span class="gname q">already 1d</span><span class="gcount q">28 hosts</span></div>
+      </div>
+      </div>
+      <div class="dtable">
+        <div class="row">
+          <div class="rk">Ground</div>
+          <div class="rv"><b>#f1f3f7, a cool light grey.</b><span class="bc">Cards need something to sit on. A white ground with white cards would need borders, which contradicts the whole approach.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Palette</div>
+          <div class="rv"><b>One blue at five steps, plus amber for clamped.</b><span class="bc">Same ordinal ramp as 02. The amber is the argument: the only hue <i>off</i> the ramp, so it reads as categorically different — which is true.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Colour semantics</div>
+          <div class="rv"><b>Blue = proceeding. Amber = the system intervened. Dashed grey = will not move.</b><span class="bc">&#11088; Three visual categories for three real outcome classes. The vocabulary matches the model exactly.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Type</div>
+          <div class="rv"><b>Manrope, weight carrying hierarchy.</b><span class="bc">Once elevation separates, rules are redundant. Manrope holds its heavier weights at small sizes better than Inter.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Numerals</div>
+          <div class="rv"><b>Tabular, weight 800 on counts.</b><span class="bc">Heavy numerals survive being placed on a coloured badge, where a lighter weight would smear.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Type scale</div>
+          <div class="rv"><b>10.5 / 11.5 / 13.5 / 14px.</b><span class="bc">Compressed, because elevation is doing the separating that size normally would.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Hierarchy</div>
+          <div class="rv"><b>Elevation first, then weight. Size barely varies.</b><span class="bc">If depth is the system, it should carry the hierarchy — otherwise it is decoration sitting on top of a different system.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Spacing</div>
+          <div class="rv"><b>8px base, 13–16px card padding.</b><span class="bc">Padding is part of the elevation illusion; too tight and the cards read as buttons.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Separation</div>
+          <div class="rv"><b>Elevation, tint and border together.</b><span class="bc">Redundant encoding on purpose — it is the one place all three channels agree, so the classes are unmistakable.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Radii</div>
+          <div class="rv"><b>11–13px.</b><span class="bc">Larger radii read as physical objects. Consistent with the thesis and unusable without it.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Elevation</div>
+          <div class="rv"><b>&#11088; Exactly three levels: raised, tinted, recessed.</b><span class="bc">Because there are exactly three outcome classes. Elevation becomes a 1:1 encoding rather than decoration, and the recessed dashed card is a spatial metaphor for <i>this one is not going to move</i>.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Motion · timing</div>
+          <div class="rv"><b>240ms with overshoot.</b><span class="bc">Overshoot implies mass, and mass implies the object is real and persists. That is the thesis: the state model made physical.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Motion · what moves</div>
+          <div class="rv"><b>Count badge scales 0.86 → 1.06 → 1. Card elevation holds.</b><span class="bc">The number is the thing that changed. Lifting the card too would say the group moved, which it did not.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Reduced motion</div>
+          <div class="rv"><b>Overshoot removed entirely, not shortened.</b><span class="bc">A spring at 0ms is a jolt. The correct fallback is no spring at all.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">State encoding</div>
+          <div class="rv"><b>Elevation + hue + border style, all three agreeing.</b><span class="bc">The most redundant of the three, and therefore the most robust to colour-blindness and to bad screens.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Contrast</div>
+          <div class="rv"><b>White on #0f62d6 = 5.4:1. White on #b8860b = 3.1:1.</b><span class="bc">&#9888; The amber badge fails AA for small text. It needs a darker amber or dark text on the badge.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">Dark mode</div>
+          <div class="rv"><b>Hardest of the three.</b><span class="bc">Shadow-based elevation does not exist on dark grounds — it has to be rebuilt as surface-lightness steps.</span></div>
+        </div>
+        <div class="row">
+          <div class="rk">At 12 groups</div>
+          <div class="rv"><b>Worst of the three. 66px cards plus gaps.</b><span class="bc">Elevation needs space to read, and space is what twelve groups do not have.</span></div>
+        </div>
+        <div class="row cost">
+          <div class="rk">Costs you</div>
+          <div class="rv">Ages fastest of the three &mdash; compare 2013 skeuomorphism, 2018 flat, 2024 glass. Degrades worst at scale, and the amber badge currently fails AA.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="after">
+    <h2>Two things worth arguing about before scoring</h2>
+    <p><b>1 &middot; Categorical vs ordinal colour.</b> Direction 01 gives the five retention values five unrelated
+    hues. Retention is an <i>ordered</i> quantity, so that encodes an ordinal scale as if it were categorical &mdash;
+    a small lie the eye believes. 02 and 03 use one hue at five steps and do not have that problem. This cuts
+    against 01, which is otherwise the strongest on honesty.</p>
+    <p><b>2 &middot; Does the language distinguish &ldquo;the system intervened&rdquo;?</b> Only 03 marks
+    <i>clamped</i> as categorically different. 01 and 02 render it identically to a clean decrease. The model
+    already separates moved / clamped / already-there &mdash; the visual layer can honour that or flatten it, and
+    flattening it is a choice, not a default.</p>
+  </div>
+</div>
+
+<script>
+const STATES = {
+  '7':  { label:'Decrease by 7d',  g1:128, g2:44 },
+  '14': { label:'Decrease by 14d', g1:90,  g2:82 }
+};
+const LANG = {
+  d1: { ms:150, ease:t=>t,                 fx:'tick'   },
+  d2: { ms:200, ease:t=>1-Math.pow(1-t,3), fx:'slide'  },
+  d3: { ms:240, ease:t=>1+2.6*Math.pow(t-1,3)+1.6*Math.pow(t-1,2), fx:'spring' }
+};
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
+let speed = 1;
+
+function tween(el, from, to, cfg){
+  if (REDUCED.matches) { el.textContent = to + ' will change'; return; }
+  const dur = cfg.ms * speed, t0 = performance.now();
+  if (cfg.fx === 'slide') el.animate(
+    [{opacity:.35, transform:'translateY(-3px)'},{opacity:1, transform:'none'}],
+    {duration:dur, easing:'cubic-bezier(.22,1,.36,1)'});
+  if (cfg.fx === 'spring') el.animate(
+    [{transform:'scale(.86)'},{transform:'scale(1.06)', offset:.62},{transform:'scale(1)'}],
+    {duration:dur, easing:'ease-out'});
+  // Final value written unconditionally: rAF is throttled in background tabs, so a
+  // tween that only writes on frames can leave the number stale. Motion must never
+  // be load-bearing for correctness.
+  const settle = setTimeout(() => { el.textContent = to + ' will change'; }, dur + 50);
+  (function frame(now){
+    const p = Math.min(1, (now - t0)/dur);
+    el.textContent = Math.round(from + (to - from) * cfg.ease(p)) + ' will change';
+    if (p < 1) requestAnimationFrame(frame); else clearTimeout(settle);
+  })(performance.now());
+}
+
+function apply(op){
+  const s = STATES[op];
+  document.querySelectorAll('.stage').forEach(stage => {
+    const key = [...stage.classList].find(c => LANG[c]);
+    if (!key) return;
+    const cfg = LANG[key];
+    const counts = stage.querySelectorAll('[data-n]');
+    [s.g1, s.g2].forEach((target, i) => {
+      const el = counts[i]; if (!el) return;
+      const from = Number(el.dataset.n);
+      if (from === target) return;
+      el.dataset.n = target;
+      tween(el, from, target, cfg);
+    });
+    const lab = stage.querySelector('[data-label]');
+    if (lab && lab.textContent !== s.label){
+      if (cfg.fx === 'tick' || REDUCED.matches) lab.textContent = s.label;
+      else { lab.animate([{opacity:0},{opacity:1}], {duration:cfg.ms*speed});
+             setTimeout(()=>lab.textContent = s.label, cfg.ms*speed*0.3); }
+    }
+  });
+}
+document.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-op]').forEach(x => x.setAttribute('aria-pressed', x===b));
+  apply(b.dataset.op);
+});
+document.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-sp]').forEach(x => x.setAttribute('aria-pressed', x===b));
+  speed = Number(b.dataset.sp);
+});
+</script>
