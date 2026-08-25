@@ -1,6 +1,10 @@
 # Figma prompt — visual direction ideation
 
-*Paste from the line below. Attach or link `visual-directions.html` if the agent can read it.*
+*Paste from the line below.*
+
+*Reference — the three directions already drawn, with their full specs and a live motion demo:*
+*`https://raw.githubusercontent.com/omkarpkh/bulk-edit-mixed/main/design/visual-directions.html`*
+*(or upload `design/visual-directions.html` from the repo directly).*
 
 ---
 
@@ -93,11 +97,26 @@ is buildable.
 **Five distinct directions.** For each:
 
 1. A one-word name and a one-sentence thesis.
-2. The specimen above, rendered in that language, at real fidelity &mdash; **two frames: the 7d state and the
+2. The specimen above, rendered in that language, at real fidelity — **two frames: the 7d state and the
    14d state**, so the transition between them can be seen or built.
-3. **A reason for every element choice — palette, type, spacing, motion, depth — in the form
-   `choice → because`.** The *because* is the point. "It looks modern" is not a because. "The five values are
-   ordinal so a single-hue ramp is more truthful than five hues" is a because.
+3. **A specification, in the form `element → choice → because`.** The *because* is the point. "It looks
+   modern" is not a because. "The five values are ordinal, so a single-hue ramp is more truthful than five
+   hues" is a because.
+
+   **Cover all eighteen of these**, because I have specified my own three directions to this depth and I need
+   like-for-like to score them:
+
+   | | | |
+   |---|---|---|
+   | Ground | Palette | Colour semantics |
+   | Type family | Numerals | Type scale |
+   | Hierarchy — what carries it | Spacing & density | Separation — rules / space / fill / elevation |
+   | Radii | Elevation | Motion · timing |
+   | Motion · what moves | Reduced motion | State encoding — the three outcome classes |
+   | Contrast — give real ratios | Dark mode — does it survive inversion | At 12 groups instead of 3 |
+
+   Two of my own three directions **fail** the contrast row. I would rather find that in the spec than in a
+   review, so give me the actual numbers, not a claim that it is accessible.
 4. **What it costs you.** Every direction trades something away. A direction with no stated cost has not been
    thought about, and I will score it lower, not higher.
 
