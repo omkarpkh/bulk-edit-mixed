@@ -5,7 +5,7 @@
 // the model is wrong — there is no second place for it to go wrong.
 
 import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, groupByTransition,
-         reconcile, retryScope, describeResult } from './model.js?v=1787568308';
+         reconcile, retryScope, describeResult } from './model.js?v=1787671470';
 
 const CSS = `
 :host { display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:#1a1a1a; }
@@ -111,6 +111,12 @@ tr.skipped .after { color:#aaa; font-weight:400; }
 .go-edit { border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:7px 14px; cursor:pointer; }
 .go-edit[disabled] { background:#fff; color:#aaa; border-color:#ddd; cursor:default; }
 .pick .rows { max-height:380px; overflow:auto; }
+/* On a phone the inner 380px scroller is a trap: a finger scrolling the page hits it
+   and pans thousands of pixels of rows instead. Let the page own vertical scrolling,
+   and leave the table as the single horizontal scroller. */
+@media (max-width:700px) {
+  .pick .rows { max-height:none; overflow-x:auto; overflow-y:visible; }
+}
 .pick table { width:100%; }
 .pick th { position:sticky; top:0; background:#fff; box-shadow:0 1px 0 #ececec; padding:8px 10px 7px 0; }
 .pick td { padding:6px 10px 6px 0; }
@@ -183,16 +189,26 @@ export class BulkEdit extends HTMLElement {
   get matching() { return this.filter ? this.all.filter(i => i.environment === this.filter) : this.all; }
 
   static LIMIT = 10000;      // beyond this, bulk edit is not the right tool and says so
-  static PAGE = 60;          // rows rendered at once
+  static PAGE = 60;          // rows rendered at once on a roomy viewport
+  static PAGE_NARROW = 12;   // on a phone, 60 rows is five screens of scrolling — the
+                             // pagination control already exists, so use it
+
+  // Page size is a function of the viewport, not a constant. Rendering 60 rows on a
+  // 375px screen is unusable whether or not it scrolls well.
+  get pageSize() {
+    return matchMedia('(max-width:700px)').matches ? BulkEdit.PAGE_NARROW : BulkEdit.PAGE;
+  }
 
   // Three different sets, and the whole scope problem is people conflating them:
   //   matching — everything the current filter matches
   //   page     — the slice of that actually rendered
   //   selection— what an operation will act on
-  get pageCount() { return Math.max(1, Math.ceil(this.matching.length / BulkEdit.PAGE)); }
+  get pageCount() { return Math.max(1, Math.ceil(this.matching.length / this.pageSize)); }
   get page() {
-    const start = (this.pageNo ?? 0) * BulkEdit.PAGE;
-    return this.matching.slice(start, start + BulkEdit.PAGE);
+    // clamped, because a viewport change can shrink the page count under a live pageNo
+    const per = this.pageSize;
+    const start = Math.min(this.pageNo ?? 0, this.pageCount - 1) * per;
+    return this.matching.slice(start, start + per);
   }
 
   // What the selection is, and how it has drifted from how it was made.
@@ -472,7 +488,7 @@ export class BulkEdit extends HTMLElement {
   }
 
   #footerHTML() {
-    const n = this.matching.length, per = BulkEdit.PAGE, pages = this.pageCount, cur = this.pageNo ?? 0;
+    const n = this.matching.length, per = this.pageSize, pages = this.pageCount, cur = this.pageNo ?? 0;
     if (!n) return '';
     const from = cur * per + 1, to = Math.min(n, (cur + 1) * per);
     const onPage = this.page.filter(i => this.selection.has(i.id)).length;
