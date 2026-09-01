@@ -27,7 +27,11 @@ const CSS = `
   --be-edge:#b8b8b8;       /* disabled and inactive borders */
   --be-dim:#767676;        /* de-emphasised labels */
   --be-control:#c8c8c8;    /* control borders */
-  --be-ghost:#767676;      /* placeholder text */
+  --be-ghost:#767676;
+  /* Ordinal, not categorical: an ordered scale gets ordered colour. Every step clears
+     3:1 on the ground, and adjacent steps are ~1.3x apart so the order is readable. */
+  --be-scale-1:#2E2E2E; --be-scale-2:#454545; --be-scale-3:#5C5C5C;
+  --be-scale-4:#6E6E6E; --be-scale-5:#7E7E7E; --be-scale-6:#8C8C8C;      /* placeholder text */
   display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:var(--be-ink);
 }
 
@@ -35,22 +39,30 @@ const CSS = `
    rebuild. That is the whole argument for naming values, tested on this component
    rather than asserted about someone else's. Toggle it with theme="designed". */
 :host([theme="designed"]) {
-  --be-ink:#16181D; --be-surface:#FFFFFF; --be-muted:#5B6270; --be-faint:#667085;
-  --be-hairline:#E3E6EB; --be-rule:#EFF1F4; --be-clamp:#B45309; --be-danger:#B3261E;
-  --be-link:#1B5FBF; --be-edge:#CFD4DC; --be-dim:#5B6270; --be-control:#CFD4DC;
-  --be-ghost:#667085;
+  /* Flow, as it argued for itself: "cool near-white says diagram canvas, not app panel",
+     and "the information is in the glyphs — arrows, walls — not the typeface". So this is
+     flatter than the wireframe, not glossier: no cards, no shadows, wider arrow column. */
+  --be-ink:#0F172A; --be-surface:#FBFAFC; --be-muted:#475569; --be-faint:#5B6675;
+  --be-hairline:#DCE3E8; --be-rule:#E9EEF2; --be-clamp:#B45309; --be-danger:#B3261E;
+  --be-link:#1B5FBF; --be-edge:#C6D0D8; --be-dim:#475569; --be-control:#C6D0D8;
+  --be-ghost:#5B6675;
+  /* teal reads as "go" without the traffic-light baggage of green */
+  --be-scale-1:#0B3B37; --be-scale-2:#0E4F49; --be-scale-3:#11635B;
+  --be-scale-4:#14776E; --be-scale-5:#178B81; --be-scale-6:#1A9F94;
   font:14.5px/1.55 "Inter var", Inter, ui-sans-serif, system-ui, sans-serif;
-  letter-spacing:-0.005em;
+  letter-spacing:-0.006em;
 }
-:host([theme="designed"]) .group { border-radius:10px; box-shadow:0 1px 2px rgba(16,24,40,.06); margin-bottom:11px; }
-:host([theme="designed"]) .group.quiet { background:#F7F8FA; }
-:host([theme="designed"]) .pill { border-radius:999px; background:#F1F3F7; border-color:#E3E6EB; padding:2px 10px; }
-:host([theme="designed"]) .group.clamped { border-color:#E9C9A3; box-shadow:0 1px 2px rgba(180,83,9,.10); }
-:host([theme="designed"]) .ghead { padding:13px 16px; }
-:host([theme="designed"]) .ghead .name { letter-spacing:-0.01em; }
-:host([theme="designed"]) kbd { border-radius:4px; }
-:host([theme="designed"]) .shaft { height:2.5px; border-radius:2px; }
-:host([theme="designed"]) .bar { border-radius:10px; }
+:host([theme="designed"]) .group { border-radius:0; box-shadow:none; margin-bottom:0; border-bottom:0; }
+:host([theme="designed"]) .group:last-of-type { border-bottom:1px solid var(--be-hairline); }
+:host([theme="designed"]) .group.quiet { background:transparent; }
+:host([theme="designed"]) .group.clamped { border-color:var(--be-hairline); }
+:host([theme="designed"]) .ghead { padding:14px 16px; }
+:host([theme="designed"]) .mark { width:96px; flex:0 0 96px; }
+:host([theme="designed"]) .shaft { height:3px; }
+:host([theme="designed"]) .clamped .shaft::before { height:15px; top:-6px; width:3px; right:-11px; }
+:host([theme="designed"]) .pill { background:transparent; border:0; padding:1px 0; color:var(--be-muted);
+         font-variant-numeric:tabular-nums; }
+:host([theme="designed"]) .clamped .pill { color:var(--be-clamp); }
 * { box-sizing:border-box; }
 button, input, select { font:inherit; color:inherit; }
 
@@ -221,7 +233,11 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 .fails .why { color:var(--be-danger); font-size:12px; }
 `;
 
-const COLORS = ['#5b7cc4', '#d9a441', '#9aa0a6', '#6aa06a', '#a06a9a', '#c46a5b'];
+// Six unrelated hues for an ordered scale was Instrument's logic — the direction that
+// placed last, and that all five independent directions overruled. The scale is now an
+// ordinal ramp read from tokens, so a theme can restate it without touching this file.
+const COLORS = ['var(--be-scale-1)','var(--be-scale-2)','var(--be-scale-3)',
+                'var(--be-scale-4)','var(--be-scale-5)','var(--be-scale-6)'];
 
 export class BulkEdit extends HTMLElement {
   #state = { fieldKey: null, method: null, operand: null, excluded: new Set(), open: new Set(), showAll: new Set(), query: {} };
