@@ -15,18 +15,42 @@ const CSS = `
   --be-ink:#1a1a1a;      /* body text and solid controls */
   --be-surface:#fff;  /* card and control ground */
   --be-muted:#666;    /* secondary text */
-  --be-faint:#999;    /* tertiary text and carets */
+  --be-faint:#767676;
+  /* faint, dim and ghost hold the same value on purpose. All three carry text, so all
+     three are floored at 4.5:1 on white — and above that floor there is not enough
+     room left for three visually distinct greys. The scale is three levels, not five. */    /* tertiary text and carets */
   --be-hairline:#d4d4d4; /* container borders */
   --be-rule:#ececec;     /* internal dividers */
   --be-clamp:#B45309;    /* the system intervened — AA on white */
   --be-danger:#8a2318;   /* destructive */
   --be-link:#1a5fb4;     /* links and the changed value */
   --be-edge:#b8b8b8;       /* disabled and inactive borders */
-  --be-dim:#888;        /* de-emphasised labels */
+  --be-dim:#767676;        /* de-emphasised labels */
   --be-control:#c8c8c8;    /* control borders */
-  --be-ghost:#aaa;      /* placeholder text */
+  --be-ghost:#767676;      /* placeholder text */
   display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:var(--be-ink);
 }
+
+/* The designed theme is a token override and nine rules — no second component, no
+   rebuild. That is the whole argument for naming values, tested on this component
+   rather than asserted about someone else's. Toggle it with theme="designed". */
+:host([theme="designed"]) {
+  --be-ink:#16181D; --be-surface:#FFFFFF; --be-muted:#5B6270; --be-faint:#667085;
+  --be-hairline:#E3E6EB; --be-rule:#EFF1F4; --be-clamp:#B45309; --be-danger:#B3261E;
+  --be-link:#1B5FBF; --be-edge:#CFD4DC; --be-dim:#5B6270; --be-control:#CFD4DC;
+  --be-ghost:#667085;
+  font:14.5px/1.55 "Inter var", Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing:-0.005em;
+}
+:host([theme="designed"]) .group { border-radius:10px; box-shadow:0 1px 2px rgba(16,24,40,.06); margin-bottom:11px; }
+:host([theme="designed"]) .group.quiet { background:#F7F8FA; }
+:host([theme="designed"]) .pill { border-radius:999px; background:#F1F3F7; border-color:#E3E6EB; padding:2px 10px; }
+:host([theme="designed"]) .group.clamped { border-color:#E9C9A3; box-shadow:0 1px 2px rgba(180,83,9,.10); }
+:host([theme="designed"]) .ghead { padding:13px 16px; }
+:host([theme="designed"]) .ghead .name { letter-spacing:-0.01em; }
+:host([theme="designed"]) kbd { border-radius:4px; }
+:host([theme="designed"]) .shaft { height:2.5px; border-radius:2px; }
+:host([theme="designed"]) .bar { border-radius:10px; }
 * { box-sizing:border-box; }
 button, input, select { font:inherit; color:inherit; }
 
@@ -91,7 +115,11 @@ kbd { font:inherit; font-size:10.5px; border:1px solid var(--be-control); border
          transition:width .3s cubic-bezier(.2,.7,.3,1); }
 .shaft::after { content:''; position:absolute; right:-1px; top:-3px;
          border-left:6px solid var(--be-muted); border-top:4px solid transparent; border-bottom:4px solid transparent; }
-.clamped .mark { border-right:2px solid var(--be-clamp); }
+/* The wall marks where THIS arrow stopped, so it sits at the end of the shaft rather
+   than at the container edge. Pinned to the edge it read as two separate marks with a
+   gap between them, which is not "stopped by a boundary" — it is just two things. */
+.clamped .shaft::before { content:''; position:absolute; right:-9px; top:-5px;
+         width:2px; height:12px; background:var(--be-clamp); }
 .clamped .shaft { background:var(--be-clamp); }
 .clamped .shaft::after { border-left-color:var(--be-clamp); }
 .quiet .mark { visibility:hidden; }
