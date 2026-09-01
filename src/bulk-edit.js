@@ -73,8 +73,13 @@ const CSS = `
 /* The rest is structure, not values — a card removed, a column widened, a control
    unboxed. None of it can be expressed as a number, which is how you tell the two apart. */
 :host([theme="designed"]) .bar { border:0; background:transparent; padding:2px 0 20px; }
+/* Flow wanted a table, not a stack of cards — so the rows stay flat and the SET gets the
+   corner. Rounding each row was what made these read as the odd elements on the page. */
 :host([theme="designed"]) .group { border-radius:0; box-shadow:none; margin-bottom:0; border-bottom:0; }
-:host([theme="designed"]) .group:last-of-type { border-bottom:1px solid var(--be-hairline); }
+:host([theme="designed"]) .group.first { border-radius:var(--be-r-2) var(--be-r-2) 0 0; }
+:host([theme="designed"]) .group.last { border-radius:0 0 var(--be-r-2) var(--be-r-2);
+         box-shadow:var(--be-shadow-1); }
+:host([theme="designed"]) .group.last { border-bottom:1px solid var(--be-hairline); }
 :host([theme="designed"]) .group.quiet { background:transparent; }
 :host([theme="designed"]) .group.clamped { border-color:var(--be-hairline); }
 :host([theme="designed"]) .ghead { padding:14px 16px; }
@@ -173,7 +178,20 @@ kbd { font:inherit; font-size:var(--be-t-xs); border:1px solid var(--be-control)
 @media (prefers-reduced-motion:reduce) { .shaft { transition:none; } }
 .clamped .ghead .name { color:var(--be-clamp); }
 .ghead { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; user-select:none; }
-.ghead .caret { width:9px; color:var(--be-faint); font-size:var(--be-t-xs); }
+.ghead .caret { position:relative; width:10px; height:10px; flex:0 0 10px; }
+.ghead .caret::before { content:''; position:absolute; left:1px; top:2px; width:5px; height:5px;
+        border-right:1.5px solid var(--be-faint); border-bottom:1.5px solid var(--be-faint);
+        transform:rotate(-45deg); transform-origin:60% 60%;
+        transition:transform var(--be-dur-1) var(--be-ease); }
+.ghead[aria-expanded="true"] .caret::before { transform:rotate(45deg); }
+.clamped .ghead .caret::before { border-color:var(--be-clamp); }
+/* Same chevron on the value picker, but a dropdown points down when closed, not right. */
+.multi-btn .caret { position:relative; width:10px; height:10px; flex:0 0 10px; }
+.multi-btn .caret::before { content:''; position:absolute; left:2px; top:1px; width:5px; height:5px;
+        border-right:1.5px solid var(--be-faint); border-bottom:1.5px solid var(--be-faint);
+        transform:rotate(45deg); transition:transform var(--be-dur-1) var(--be-ease); }
+.multi-btn[aria-expanded="true"] .caret::before { transform:rotate(-135deg); }
+@media (prefers-reduced-motion:reduce) { .ghead .caret::before { transition:none; } }
 .ghead .name { font-weight:600; }
 .group.quiet .ghead .name { font-weight:400; color:var(--be-ink); }
 .pill { font-size:var(--be-t-sm); background:#eef; border:1px solid #dde; padding:1px 8px; }
@@ -559,7 +577,7 @@ export class BulkEdit extends HTMLElement {
 
       <div class="label">Transition groups</div>
       ${this.#needsValue(field, s) ? '<div class="empty">Choose a value to see what would change.</div>'
-        : groups.length ? groups.map(g => this.#groupHTML(g, field)).join('')
+        : groups.length ? groups.map((g, i) => this.#groupHTML(g, field, i === 0, i === groups.length - 1)).join('')
         : '<div class="empty">Nothing selected.</div>'}
     `;
 
@@ -863,7 +881,7 @@ export class BulkEdit extends HTMLElement {
             ${chosen.length
               ? chosen.map(v => `<span class="vchip">${v}</span>`).join('')
               : '<span class="ph">Choose values…</span>'}
-            <span class="caret" aria-hidden="true">▾</span>
+            <span class="caret" aria-hidden="true"></span>
           </button>
           ${open ? `<div class="multi-menu" role="group" aria-label="Values">
             ${opts.map(o => `<label class="mrow"><input type="checkbox" data-val="${o}"
@@ -878,7 +896,7 @@ export class BulkEdit extends HTMLElement {
     </select>`;
   }
 
-  #groupHTML(g, field) {
+  #groupHTML(g, field, isFirst = false, isLast = false) {
     const s = this.#state;
     const open = s.open.has(g.key);
     const quiet = g.kind === 'unchanged';
@@ -892,9 +910,9 @@ export class BulkEdit extends HTMLElement {
     const visible = showingAll ? kept : kept.slice(0, 5);
     const hidden = kept.length - visible.length;
 
-    return `<div class="group${quiet ? ' quiet' : ''}${g.kind === 'clamped' ? ' clamped' : ''}">
+    return `<div class="group${quiet ? ' quiet' : ''}${g.kind === 'clamped' ? ' clamped' : ''}${isFirst ? ' first' : ''}${isLast ? ' last' : ''}">
       <button class="ghead" type="button" data-key="${g.key}" aria-expanded="${open}">
-        <span class="caret" aria-hidden="true">${open ? '▼' : '►'}</span>
+        <span class="caret" aria-hidden="true"></span>
         <span class="name">${g.label}</span>${g.kind === 'clamped' ? `<span class="mark" aria-hidden="true"><i class="shaft" style="width:${Math.round((g.changing / Math.max(1, this.items.length)) * 1000) / 10}%"></i></span>` : ''}
         <span class="pill">${quiet ? `${g.total} will not change` : `${g.changing} will change`}</span>
         ${g.excluded ? `<span class="exc">· ${g.excluded} excluded</span>` : ''}
