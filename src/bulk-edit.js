@@ -65,12 +65,17 @@ input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:
 
 .group { border:1px solid #d4d4d4; background:#fff; margin-bottom:9px; }
 .group.quiet { background:#fafafa; border-color:#e4e4e4; }
+/* Flow's grammar: the arrow carries movement, so absence of an arrow is the signal that nothing moves. Space is reserved either way so the labels stay aligned. */
+.mark { display:inline-block; width:20px; flex:0 0 20px; color:#666; font-size:13px; text-align:left; }
+.clamped .mark { color:#B45309; border-right:2px solid #B45309; width:16px; flex:0 0 16px; margin-right:4px; }
+.quiet .mark { visibility:hidden; }
+.clamped .ghead .name { color:#B45309; }
 .ghead { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; user-select:none; }
 .ghead .caret { width:9px; color:#999; font-size:10px; }
 .ghead .name { font-weight:600; }
-.group.quiet .ghead .name { font-weight:400; color:#888; }
+.group.quiet .ghead .name { font-weight:400; color:#1a1a1a; }
 .pill { font-size:11.5px; background:#eef; border:1px solid #dde; padding:1px 8px; }
-.group.quiet .pill { background:#f0f0f0; border-color:#e4e4e4; color:#888; }
+.group.quiet .pill { background:#f0f0f0; border-color:#d4d4d4; color:#1a1a1a; }
 .exc { font-size:11.5px; color:#999; }
 .gbody { border-top:1px solid #ececec; padding:11px 14px 13px; }
 
@@ -762,11 +767,11 @@ export class BulkEdit extends HTMLElement {
     const visible = showingAll ? kept : kept.slice(0, 5);
     const hidden = kept.length - visible.length;
 
-    return `<div class="group ${quiet ? 'quiet' : ''}">
+    return `<div class="group${quiet ? ' quiet' : ''}${g.kind === 'clamped' ? ' clamped' : ''}">
       <button class="ghead" type="button" data-key="${g.key}" aria-expanded="${open}">
         <span class="caret" aria-hidden="true">${open ? '▼' : '►'}</span>
-        <span class="name">${g.label}</span>
-        <span class="pill">${quiet ? `${g.total} host${g.total === 1 ? '' : 's'}` : `${g.changing} will change`}</span>
+        <span class="mark" aria-hidden="true">&rarr;</span><span class="name">${g.label}</span>
+        <span class="pill">${quiet ? `${g.total} will not change` : `${g.changing} will change`}</span>
         ${g.excluded ? `<span class="exc">· ${g.excluded} excluded</span>` : ''}
       </button>
       ${open ? `<div class="gbody">
