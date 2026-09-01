@@ -864,8 +864,8 @@ export class BulkEdit extends HTMLElement {
   #operandHTML(field, method, operand) {
     if (method === 'clear' || field.type === 'boolean') return '';
     if (field.type === 'number')
-      return `<span class="arrow" aria-hidden="true">→</span><input id="operand" type="text" aria-label="Value"
-                value="${operand ?? ''}" style="min-width:74px">${field.unit ? `<span class="unit">${field.unit}</span>` : ''}`;
+      return `<span class="arrow" aria-hidden="true">→</span><input id="operand" type="text" inputmode="numeric" aria-label="Value"
+                value="${operand ?? ''}" size="4" style="min-width:0;width:auto">${field.unit ? `<span class="unit">${field.unit}</span>` : ''}`;
 
     const opts = field.options ?? [...new Set(this.items.flatMap(i => [].concat(i[field.key] ?? [])))].sort();
 
