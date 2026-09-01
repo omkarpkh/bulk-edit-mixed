@@ -8,120 +8,140 @@ import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, group
          reconcile, retryScope, describeResult } from './model.js?v=1787671470';
 
 const CSS = `
-:host { display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:#1a1a1a; }
+:host {
+  /* Every value this component draws with is named here. A component in a
+     portfolio about machine-readable design systems does not get to have
+     anonymous colours. Override any of them from outside the shadow root. */
+  --be-ink:#1a1a1a;      /* body text and solid controls */
+  --be-surface:#fff;  /* card and control ground */
+  --be-muted:#666;    /* secondary text */
+  --be-faint:#999;    /* tertiary text and carets */
+  --be-hairline:#d4d4d4; /* container borders */
+  --be-rule:#ececec;     /* internal dividers */
+  --be-clamp:#B45309;    /* the system intervened — AA on white */
+  --be-danger:#8a2318;   /* destructive */
+  --be-link:#1a5fb4;     /* links and the changed value */
+  --be-edge:#b8b8b8;       /* disabled and inactive borders */
+  --be-dim:#888;        /* de-emphasised labels */
+  --be-control:#c8c8c8;    /* control borders */
+  --be-ghost:#aaa;      /* placeholder text */
+  display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:var(--be-ink);
+}
 * { box-sizing:border-box; }
 button, input, select { font:inherit; color:inherit; }
 
-.bar { border:1px solid #d4d4d4; background:#fff; padding:14px 16px; }
+.bar { border:1px solid var(--be-hairline); background:var(--be-surface); padding:14px 16px; }
 .row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
 /* the operation reads as a sentence — it wraps as a whole or not at all,
    because breaking between the verb and its object strands the value */
 .sentence { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
 .context { margin-top:12px; }
-select, input[type=text] { border:1px solid #b8b8b8; background:#fff; padding:6px 9px; min-width:130px; }
-.arrow { color:#999; }
+select, input[type=text] { border:1px solid var(--be-edge); background:var(--be-surface); padding:6px 9px; min-width:130px; }
+.arrow { color:var(--be-faint); }
 
 .dist { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.dist .track { display:flex; width:220px; height:9px; border:1px solid #c8c8c8; overflow:hidden; flex:0 0 auto; }
+.dist .track { display:flex; width:220px; height:9px; border:1px solid var(--be-control); overflow:hidden; flex:0 0 auto; }
 .dist .seg { min-width:3px; }
 .dist .seg.rest { background:repeating-linear-gradient(45deg,#f0f0f0,#f0f0f0 3px,#e6e6e6 3px,#e6e6e6 6px); min-width:0; }
-.dist .keys { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:11.5px; line-height:1.4; color:#666; }
-.dist .keys b { color:#1a1a1a; font-weight:600; }
+.dist .keys { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:11.5px; line-height:1.4; color:var(--be-muted); }
+.dist .keys b { color:var(--be-ink); font-weight:600; }
 .dist .keys i { font-style:normal; display:inline-block; width:7px; height:7px; margin-right:4px; border:1px solid #0003; }
-.dist .cap { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:#999; flex:0 0 auto; }
+.dist .cap { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--be-faint); flex:0 0 auto; }
 
-.apply { margin-left:auto; border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:8px 15px; cursor:pointer; }
-.apply[disabled] { background:#fff; color:#999; border-color:#ccc; cursor:default; }
-.apply.destructive { background:#8a2318; border-color:#8a2318; }
+.apply { margin-left:auto; border:1px solid var(--be-ink); background:var(--be-ink); color:var(--be-surface); padding:8px 15px; cursor:pointer; }
+.apply[disabled] { background:var(--be-surface); color:var(--be-faint); border-color:#ccc; cursor:default; }
+.apply.destructive { background:var(--be-danger); border-color:var(--be-danger); }
 
 .summary { margin-top:9px; font-size:13px; color:#444; }
-.summary b { color:#1a1a1a; }
-.warn { margin-top:8px; font-size:12px; border-left:3px solid #8a2318; padding:5px 9px; color:#8a2318; background:#fbf2f0; }
+.summary b { color:var(--be-ink); }
+.warn { margin-top:8px; font-size:12px; border-left:3px solid var(--be-danger); padding:5px 9px; color:var(--be-danger); background:#fbf2f0; }
 .unit { font-size:12.5px; color:#777; margin-left:-4px; }
 .multi-dist { align-items:flex-start; }
 .multi-dist .mini { display:flex; align-items:center; gap:9px; }
 .multi-dist .track { width:120px; }
-.multi-dist .mlab { font-size:11.5px; color:#666; }
-.multi-dist .mlab b { color:#1a1a1a; }
+.multi-dist .mlab { font-size:11.5px; color:var(--be-muted); }
+.multi-dist .mlab b { color:var(--be-ink); }
 .multi { position:relative; display:inline-flex; }
-.multi-btn { display:flex; align-items:center; gap:5px; min-width:150px; min-height:31px; border:1px solid #b8b8b8;
-  background:#fff; padding:4px 8px; font:inherit; cursor:pointer; text-align:left; flex-wrap:wrap; }
-.multi-btn .ph { color:#999; }
-.multi-btn .caret { margin-left:auto; color:#888; font-size:10px; }
+.multi-btn { display:flex; align-items:center; gap:5px; min-width:150px; min-height:31px; border:1px solid var(--be-edge);
+  background:var(--be-surface); padding:4px 8px; font:inherit; cursor:pointer; text-align:left; flex-wrap:wrap; }
+.multi-btn .ph { color:var(--be-faint); }
+.multi-btn .caret { margin-left:auto; color:var(--be-dim); font-size:10px; }
 .vchip { background:#eef; border:1px solid #dde; font-size:11.5px; padding:1px 6px; }
 .multi-menu { position:absolute; top:calc(100% + 3px); left:0; z-index:5; min-width:190px; max-height:210px; overflow:auto;
-  background:#fff; border:1px solid #b8b8b8; box-shadow:0 3px 10px #0002; padding:5px 0; }
+  background:var(--be-surface); border:1px solid var(--be-edge); box-shadow:0 3px 10px #0002; padding:5px 0; }
 .mrow { display:flex; align-items:center; gap:8px; padding:5px 11px; font-size:13px; cursor:pointer; }
 .mrow:hover { background:#f4f6fb; }
-.addop { margin-top:7px; font-size:12.5px; color:#aaa; background:none; border:0; padding:0; font-family:inherit;
+.addop { margin-top:7px; font-size:12.5px; color:var(--be-ghost); background:none; border:0; padding:0; font-family:inherit;
   cursor:default; display:inline-flex; align-items:center; gap:7px; }
-.addop .soon { font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:#999;
+.addop .soon { font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--be-faint);
   border:1px dashed #cfcfcf; padding:1px 6px; }
 .ghead { width:100%; text-align:left; background:none; border:0; font:inherit; }
 .ghead:focus-visible, .chip:focus-visible, .go-edit:focus-visible, .apply:focus-visible,
-input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:2px solid #1a5fb4; outline-offset:1px; }
+input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:2px solid var(--be-link); outline-offset:1px; }
 
-.label { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:#888; margin:20px 0 7px; }
+.label { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--be-dim); margin:20px 0 7px; }
 
-.group { border:1px solid #d4d4d4; background:#fff; margin-bottom:9px; }
+.group { border:1px solid var(--be-hairline); background:var(--be-surface); margin-bottom:9px; }
+kbd { font:inherit; font-size:10.5px; border:1px solid var(--be-control); border-bottom-width:2px;
+      padding:0 4px; color:var(--be-muted); background:#fafafa; }
 .group.quiet { background:#fafafa; border-color:#e4e4e4; }
 /* Flow's grammar: the arrow carries movement, so absence of an arrow is the signal that nothing moves. Space is reserved either way so the labels stay aligned. */
 .mark { position:relative; display:inline-block; width:64px; flex:0 0 64px; height:14px; }
-.shaft { position:absolute; left:0; top:6px; height:2px; background:#666;
+.shaft { position:absolute; left:0; top:6px; height:2px; background:var(--be-muted);
          transition:width .3s cubic-bezier(.2,.7,.3,1); }
 .shaft::after { content:''; position:absolute; right:-1px; top:-3px;
-         border-left:6px solid #666; border-top:4px solid transparent; border-bottom:4px solid transparent; }
-.clamped .mark { border-right:2px solid #B45309; }
-.clamped .shaft { background:#B45309; }
-.clamped .shaft::after { border-left-color:#B45309; }
+         border-left:6px solid var(--be-muted); border-top:4px solid transparent; border-bottom:4px solid transparent; }
+.clamped .mark { border-right:2px solid var(--be-clamp); }
+.clamped .shaft { background:var(--be-clamp); }
+.clamped .shaft::after { border-left-color:var(--be-clamp); }
 .quiet .mark { visibility:hidden; }
 @media (prefers-reduced-motion:reduce) { .shaft { transition:none; } }
-.clamped .ghead .name { color:#B45309; }
+.clamped .ghead .name { color:var(--be-clamp); }
 .ghead { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; user-select:none; }
-.ghead .caret { width:9px; color:#999; font-size:10px; }
+.ghead .caret { width:9px; color:var(--be-faint); font-size:10px; }
 .ghead .name { font-weight:600; }
-.group.quiet .ghead .name { font-weight:400; color:#1a1a1a; }
+.group.quiet .ghead .name { font-weight:400; color:var(--be-ink); }
 .pill { font-size:11.5px; background:#eef; border:1px solid #dde; padding:1px 8px; }
-.group.quiet .pill { background:#f0f0f0; border-color:#d4d4d4; color:#1a1a1a; }
-.exc { font-size:11.5px; color:#999; }
-.gbody { border-top:1px solid #ececec; padding:11px 14px 13px; }
+.group.quiet .pill { background:#f0f0f0; border-color:var(--be-hairline); color:var(--be-ink); }
+.exc { font-size:11.5px; color:var(--be-faint); }
+.gbody { border-top:1px solid var(--be-rule); padding:11px 14px 13px; }
 
 .search { width:250px; margin-bottom:10px; }
 table { width:100%; border-collapse:collapse; font-size:13px; }
-th { text-align:left; font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:#999; font-weight:400; padding:0 8px 6px 0; }
+th { text-align:left; font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:var(--be-faint); font-weight:400; padding:0 8px 6px 0; }
 td { padding:5px 8px 5px 0; border-top:1px solid #f2f2f2; }
-tr.skipped td { color:#aaa; }
-tr.skipped .after { color:#aaa; font-weight:400; }
-.before { color:#888; }
+tr.skipped td { color:var(--be-ghost); }
+tr.skipped .after { color:var(--be-ghost); font-weight:400; }
+.before { color:var(--be-dim); }
 .after { font-weight:600; }
-.tag { font-size:11px; color:#999; }
-.more { margin-top:9px; font-size:12.5px; color:#666; }
-.more a { color:#1a5fb4; cursor:pointer; text-decoration:none; }
-.subhead { font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:#aaa; padding:12px 0 2px; }
-.empty { color:#999; font-size:13px; padding:6px 0; }
+.tag { font-size:11px; color:var(--be-faint); }
+.more { margin-top:9px; font-size:12.5px; color:var(--be-muted); }
+.more a { color:var(--be-link); cursor:pointer; text-decoration:none; }
+.subhead { font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:var(--be-ghost); padding:12px 0 2px; }
+.empty { color:var(--be-faint); font-size:13px; padding:6px 0; }
 
-.pick { border:1px solid #d4d4d4; background:#fff; }
-.pick .top { display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:12px 14px; border-bottom:1px solid #ececec; }
-.chip { font-size:12.5px; border:1px solid #c8c8c8; background:#fff; padding:4px 11px; cursor:pointer; }
-.chip[aria-pressed=true] { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+.pick { border:1px solid var(--be-hairline); background:var(--be-surface); }
+.pick .top { display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:12px 14px; border-bottom:1px solid var(--be-rule); }
+.chip { font-size:12.5px; border:1px solid var(--be-control); background:var(--be-surface); padding:4px 11px; cursor:pointer; }
+.chip[aria-pressed=true] { background:var(--be-ink); color:var(--be-surface); border-color:var(--be-ink); }
 .chip.sel { margin-left:6px; }
 .matchcount { margin-left:auto; font-size:12.5px; color:#777; }
-.strip { border-bottom:1px solid #ececec; background:#f7f9fd; }
+.strip { border-bottom:1px solid var(--be-rule); background:#f7f9fd; }
 .strip-main { display:flex; align-items:center; gap:12px; padding:10px 14px; font-size:13.5px; }
 .strip-main .tick { color:#2f6b3f; }
 .strip-main b { font-weight:600; }
 .scope-ctl { display:flex; align-items:center; gap:7px; margin-left:6px; }
-.scope-lbl { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:#888; }
-.scope-ctl select { border:1px solid #b8b8b8; background:#fff; padding:5px 8px; font-size:13px; max-width:330px; }
+.scope-lbl { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--be-dim); }
+.scope-ctl select { border:1px solid var(--be-edge); background:var(--be-surface); padding:5px 8px; font-size:13px; max-width:330px; }
 .strip .go-edit { margin-left:auto; }
 .strip-note { padding:0 14px 10px 32px; font-size:12.5px; color:#777; }
 .strip-note .drift { color:#8a5a18; }
 .strip-fix { padding:0 14px 11px 32px; font-size:12.5px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-.strip-fix a { color:#1a5fb4; cursor:pointer; text-decoration:none; }
+.strip-fix a { color:var(--be-link); cursor:pointer; text-decoration:none; }
 .strip-fix a:hover { text-decoration:underline; }
 .strip-fix .sep { color:#ccc; }
-.go-edit { border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:7px 14px; cursor:pointer; }
-.go-edit[disabled] { background:#fff; color:#aaa; border-color:#ddd; cursor:default; }
+.go-edit { border:1px solid var(--be-ink); background:var(--be-ink); color:var(--be-surface); padding:7px 14px; cursor:pointer; }
+.go-edit[disabled] { background:var(--be-surface); color:var(--be-ghost); border-color:#ddd; cursor:default; }
 .pick .rows { max-height:380px; overflow:auto; }
 /* On a phone the inner 380px scroller is a trap: a finger scrolling the page hits it
    and pans thousands of pixels of rows instead. Let the page own vertical scrolling,
@@ -130,47 +150,47 @@ tr.skipped .after { color:#aaa; font-weight:400; }
   .pick .rows { max-height:none; overflow-x:auto; overflow-y:visible; }
 }
 .pick table { width:100%; }
-.pick th { position:sticky; top:0; background:#fff; box-shadow:0 1px 0 #ececec; padding:8px 10px 7px 0; }
+.pick th { position:sticky; top:0; background:var(--be-surface); box-shadow:0 1px 0 var(--be-rule); padding:8px 10px 7px 0; }
 .pick td { padding:6px 10px 6px 0; }
 .pick tr.on td { background:#f7f9fd; }
 .pick .pad { padding-left:14px; }
-.foot { display:flex; align-items:center; gap:12px; padding:10px 14px; border-top:1px solid #ececec; font-size:12.5px; color:#666; flex-wrap:wrap; }
-.foot .shows b { color:#1a1a1a; }
-.foot .onpage { color:#888; }
+.foot { display:flex; align-items:center; gap:12px; padding:10px 14px; border-top:1px solid var(--be-rule); font-size:12.5px; color:var(--be-muted); flex-wrap:wrap; }
+.foot .shows b { color:var(--be-ink); }
+.foot .onpage { color:var(--be-dim); }
 .pager { margin-left:auto; display:flex; gap:3px; align-items:center; }
-.pnum { font:inherit; font-size:12.5px; border:1px solid transparent; background:none; color:#1a5fb4; padding:3px 8px; cursor:pointer; }
-.pnum[aria-current=true] { border-color:#c8c8c8; background:#fff; color:#1a1a1a; font-weight:600; }
+.pnum { font:inherit; font-size:12.5px; border:1px solid transparent; background:none; color:var(--be-link); padding:3px 8px; cursor:pointer; }
+.pnum[aria-current=true] { border-color:var(--be-control); background:var(--be-surface); color:var(--be-ink); font-weight:600; }
 .pnum[disabled] { color:#ccc; cursor:default; }
 .pager .gap { color:#bbb; padding:0 2px; }
-.slot { border:1px dashed #c0c0c0; background:#fafafa; color:#888; font-size:12.5px; padding:8px 11px; margin:10px 14px 12px; }
-.backlink { font-size:12.5px; color:#666; margin-bottom:10px; }
-.backlink a { color:#1a5fb4; cursor:pointer; text-decoration:none; }
+.slot { border:1px dashed #c0c0c0; background:#fafafa; color:var(--be-dim); font-size:12.5px; padding:8px 11px; margin:10px 14px 12px; }
+.backlink { font-size:12.5px; color:var(--be-muted); margin-bottom:10px; }
+.backlink a { color:var(--be-link); cursor:pointer; text-decoration:none; }
 
 .sheet { position:fixed; inset:0; background:#0006; display:flex; align-items:center; justify-content:center; padding:24px; }
-.card { background:#fff; border:1px solid #1a1a1a; max-width:520px; width:100%; padding:20px 22px; }
+.card { background:var(--be-surface); border:1px solid var(--be-ink); max-width:520px; width:100%; padding:20px 22px; }
 .card h3 { margin:0 0 9px; font-size:15px; }
 .card p { margin:0 0 11px; font-size:13.5px; color:#444; }
-.card .list { font-size:12.5px; color:#666; background:#f6f6f6; border:1px solid #eee; padding:8px 10px; margin-bottom:13px; max-height:120px; overflow:auto; }
+.card .list { font-size:12.5px; color:var(--be-muted); background:#f6f6f6; border:1px solid #eee; padding:8px 10px; margin-bottom:13px; max-height:120px; overflow:auto; }
 .card .acts { display:flex; gap:9px; justify-content:flex-end; }
-.card button { border:1px solid #b8b8b8; background:#fff; padding:7px 14px; cursor:pointer; }
-.card button.go { background:#8a2318; border-color:#8a2318; color:#fff; }
-.card button.go[disabled] { background:#fff; color:#bbb; border-color:#ddd; cursor:default; }
+.card button { border:1px solid var(--be-edge); background:var(--be-surface); padding:7px 14px; cursor:pointer; }
+.card button.go { background:var(--be-danger); border-color:var(--be-danger); color:var(--be-surface); }
+.card button.go[disabled] { background:var(--be-surface); color:#bbb; border-color:#ddd; cursor:default; }
 .confirm { display:flex; gap:7px; align-items:center; font-size:13px; margin-bottom:14px; }
-.confirm input { width:150px; border:1px solid #b8b8b8; padding:5px 8px; }
+.confirm input { width:150px; border:1px solid var(--be-edge); padding:5px 8px; }
 
-.progress { border:1px solid #d4d4d4; background:#fff; padding:16px; }
+.progress { border:1px solid var(--be-hairline); background:var(--be-surface); padding:16px; }
 .progress .track { height:6px; background:#eee; margin:10px 0 8px; }
-.progress .fill { height:6px; background:#1a1a1a; transition:width .18s linear; }
+.progress .fill { height:6px; background:var(--be-ink); transition:width .18s linear; }
 
-.result { border:1px solid #d4d4d4; background:#fff; padding:16px; }
-.result.bad { border-color:#8a2318; }
+.result { border:1px solid var(--be-hairline); background:var(--be-surface); padding:16px; }
+.result.bad { border-color:var(--be-danger); }
 .result h3 { margin:0 0 6px; font-size:14px; }
 .result .acts { margin-top:13px; display:flex; gap:9px; }
-.result .acts button { border:1px solid #1a1a1a; background:#1a1a1a; color:#fff; padding:7px 14px; cursor:pointer; }
-.result .acts button.ghost { background:#fff; color:#1a1a1a; }
+.result .acts button { border:1px solid var(--be-ink); background:var(--be-ink); color:var(--be-surface); padding:7px 14px; cursor:pointer; }
+.result .acts button.ghost { background:var(--be-surface); color:var(--be-ink); }
 .fails { margin-top:11px; font-size:13px; }
 .fails tr td { border-top:1px solid #f2f2f2; padding:5px 8px 5px 0; }
-.fails .why { color:#8a2318; font-size:12px; }
+.fails .why { color:var(--be-danger); font-size:12px; }
 `;
 
 const COLORS = ['#5b7cc4', '#d9a441', '#9aa0a6', '#6aa06a', '#a06a9a', '#c46a5b'];
@@ -280,11 +300,23 @@ export class BulkEdit extends HTMLElement {
     this.shadowRoot.addEventListener('click', e => this.#onClick(e));
     this.shadowRoot.addEventListener('change', e => this.#onChange(e));
     this.shadowRoot.addEventListener('input', e => this.#onInput(e));
+    this.shadowRoot.addEventListener('keydown', e => this.#onKey(e));
     // `this.all` and not `this.items` — the items getter filters `all`, so asking
     // it whether data has arrived throws before it ever has. An exception thrown
     // in a custom element callback is reported and swallowed rather than raised
     // to the caller, so this failed silently on every upgrade.
     if (this.all) this.#render();
+  }
+
+  // A tool someone runs fifty times a day needs a way out that is not the mouse.
+  // Escape backs out of whatever state you are in — except a commit already in
+  // flight, which is the one thing that must not be interruptible from a keystroke.
+  #onKey(e) {
+    if (e.key !== 'Escape') return;
+    const back = { editing: 'reselect', confirming: 'cancel', done: 'done' }[this.#phase.name];
+    if (!back) return;
+    e.preventDefault();
+    this.#act(back);
   }
 
   #onChange(e) {
@@ -413,7 +445,7 @@ export class BulkEdit extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>${CSS}</style>
-      <div class="backlink"><a data-act="reselect">← Change selection</a> · ${this.selection.size} of ${this.all.length} hosts</div>
+      <div class="backlink"><a data-act="reselect">← Change selection</a> <kbd>Esc</kbd> · ${this.selection.size} of ${this.all.length} hosts</div>
       <div class="bar">
         <div class="row">
           <span class="sentence">
@@ -642,7 +674,7 @@ export class BulkEdit extends HTMLElement {
       return `<div class="progress">
         <b>Applying to ${ph.total} host${ph.total === 1 ? '' : 's'}…</b>
         <div class="track"><div class="fill" style="width:${pct}%"></div></div>
-        <div style="font-size:12.5px;color:#666">${ph.done} of ${ph.total} · do not close this</div>
+        <div style="font-size:12.5px;color:var(--be-muted)">${ph.done} of ${ph.total} · do not close this</div>
       </div>`;
     }
 
@@ -653,7 +685,7 @@ export class BulkEdit extends HTMLElement {
         ${bad ? `<p style="margin:0;font-size:13px;color:#444">The ${r.counts.succeeded} that succeeded are done and will not be touched again. A retry applies only to the ${r.counts.failed} below.</p>
           <table class="fails">${r.failed.slice(0, 5).map(x =>
             `<tr><td>${x.item.hostname}</td><td class="before">${fmt(x.before)} → ${fmt(x.after)}</td><td class="why">timed out</td></tr>`).join('')}
-            ${r.counts.failed > 5 ? `<tr><td colspan="3" style="color:#999">… and ${r.counts.failed - 5} more</td></tr>` : ''}</table>` : ''}
+            ${r.counts.failed > 5 ? `<tr><td colspan="3" style="color:var(--be-faint)">… and ${r.counts.failed - 5} more</td></tr>` : ''}</table>` : ''}
         <div class="acts">
           ${bad ? `<button data-act="retry">Retry ${r.counts.failed} failed</button>` : ''}
           <button class="ghost" data-act="done">${bad ? 'Leave them' : 'Done'}</button>
@@ -713,7 +745,7 @@ export class BulkEdit extends HTMLElement {
       ? [...head, { value: `${vals.length - MAX} other${vals.length - MAX === 1 ? '' : 's'}`, count: tailCount, other: true }]
       : vals;
 
-    const colour = (v, i) => v.other ? '#c8c8c8' : COLORS[i % COLORS.length];
+    const colour = (v, i) => v.other ? 'var(--be-control)' : COLORS[i % COLORS.length];
     const lbl = v => v.other || !field.unit ? fmt(v.value) : `${fmt(v.value)}${field.unit}`;
     return `<div class="dist">
       <div class="cap">Currently</div>
@@ -777,7 +809,7 @@ export class BulkEdit extends HTMLElement {
     return `<div class="group${quiet ? ' quiet' : ''}${g.kind === 'clamped' ? ' clamped' : ''}">
       <button class="ghead" type="button" data-key="${g.key}" aria-expanded="${open}">
         <span class="caret" aria-hidden="true">${open ? '▼' : '►'}</span>
-        <span class="mark" aria-hidden="true"><i class="shaft" style="width:${Math.max(14, Math.round(((quiet ? g.total : g.changing) / Math.max(1, this.items.length)) * 100))}%"></i></span><span class="name">${g.label}</span>
+        <span class="mark" aria-hidden="true"><i class="shaft" style="width:${Math.round(((quiet ? g.total : g.changing) / Math.max(1, this.items.length)) * 1000) / 10}%"></i></span><span class="name">${g.label}</span>
         <span class="pill">${quiet ? `${g.total} will not change` : `${g.changing} will change`}</span>
         ${g.excluded ? `<span class="exc">· ${g.excluded} excluded</span>` : ''}
       </button>
