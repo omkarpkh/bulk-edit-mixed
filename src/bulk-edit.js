@@ -151,8 +151,14 @@ input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:
 kbd { font:inherit; font-size:var(--be-t-xs); border:1px solid var(--be-control); border-bottom-width:2px;
       padding:0 4px; color:var(--be-muted); background:#fafafa; }
 .group.quiet { background:#fafafa; border-color:#e4e4e4; }
-/* Flow's grammar: the arrow carries movement, so absence of an arrow is the signal that nothing moves. Space is reserved either way so the labels stay aligned. */
-.mark { position:relative; display:inline-block; width:64px; flex:0 0 64px; height:14px; }
+/* The arrow is only on the clamped row now. Three findings put it there: a clamp is
+   reachable in one of five common operations, real group sets are often two rows and
+   not three, and in the built component it sat ten pixels from a disclosure caret that
+   the scored Figma frames never had — a control glyph and a data glyph, side by side.
+   What survives is the part the count cannot do live: drag the operand and watch the
+   clamp swell, 44 hosts to 82. It follows the label instead of preceding it, so it is
+   next to the thing it qualifies rather than next to the thing you click. */
+.mark { position:relative; display:inline-block; width:64px; flex:0 0 64px; height:14px; margin-left:2px; }
 .shaft { position:absolute; left:0; top:6px; height:2px; background:var(--be-muted);
          transition:width var(--be-dur-2) var(--be-ease); }
 .shaft::after { content:''; position:absolute; right:-1px; top:-3px;
@@ -164,7 +170,6 @@ kbd { font:inherit; font-size:var(--be-t-xs); border:1px solid var(--be-control)
          width:2px; height:12px; background:var(--be-clamp); }
 .clamped .shaft { background:var(--be-clamp); }
 .clamped .shaft::after { border-left-color:var(--be-clamp); }
-.quiet .mark { visibility:hidden; }
 @media (prefers-reduced-motion:reduce) { .shaft { transition:none; } }
 .clamped .ghead .name { color:var(--be-clamp); }
 .ghead { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; user-select:none; }
@@ -890,7 +895,7 @@ export class BulkEdit extends HTMLElement {
     return `<div class="group${quiet ? ' quiet' : ''}${g.kind === 'clamped' ? ' clamped' : ''}">
       <button class="ghead" type="button" data-key="${g.key}" aria-expanded="${open}">
         <span class="caret" aria-hidden="true">${open ? '▼' : '►'}</span>
-        <span class="mark" aria-hidden="true"><i class="shaft" style="width:${Math.round(((quiet ? g.total : g.changing) / Math.max(1, this.items.length)) * 1000) / 10}%"></i></span><span class="name">${g.label}</span>
+        <span class="name">${g.label}</span>${g.kind === 'clamped' ? `<span class="mark" aria-hidden="true"><i class="shaft" style="width:${Math.round((g.changing / Math.max(1, this.items.length)) * 1000) / 10}%"></i></span>` : ''}
         <span class="pill">${quiet ? `${g.total} will not change` : `${g.changing} will change`}</span>
         ${g.excluded ? `<span class="exc">· ${g.excluded} excluded</span>` : ''}
       </button>
