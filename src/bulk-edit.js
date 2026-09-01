@@ -66,9 +66,16 @@ input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:
 .group { border:1px solid #d4d4d4; background:#fff; margin-bottom:9px; }
 .group.quiet { background:#fafafa; border-color:#e4e4e4; }
 /* Flow's grammar: the arrow carries movement, so absence of an arrow is the signal that nothing moves. Space is reserved either way so the labels stay aligned. */
-.mark { display:inline-block; width:20px; flex:0 0 20px; color:#666; font-size:13px; text-align:left; }
-.clamped .mark { color:#B45309; border-right:2px solid #B45309; width:16px; flex:0 0 16px; margin-right:4px; }
+.mark { position:relative; display:inline-block; width:64px; flex:0 0 64px; height:14px; }
+.shaft { position:absolute; left:0; top:6px; height:2px; background:#666;
+         transition:width .3s cubic-bezier(.2,.7,.3,1); }
+.shaft::after { content:''; position:absolute; right:-1px; top:-3px;
+         border-left:6px solid #666; border-top:4px solid transparent; border-bottom:4px solid transparent; }
+.clamped .mark { border-right:2px solid #B45309; }
+.clamped .shaft { background:#B45309; }
+.clamped .shaft::after { border-left-color:#B45309; }
 .quiet .mark { visibility:hidden; }
+@media (prefers-reduced-motion:reduce) { .shaft { transition:none; } }
 .clamped .ghead .name { color:#B45309; }
 .ghead { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; user-select:none; }
 .ghead .caret { width:9px; color:#999; font-size:10px; }
@@ -770,7 +777,7 @@ export class BulkEdit extends HTMLElement {
     return `<div class="group${quiet ? ' quiet' : ''}${g.kind === 'clamped' ? ' clamped' : ''}">
       <button class="ghead" type="button" data-key="${g.key}" aria-expanded="${open}">
         <span class="caret" aria-hidden="true">${open ? '▼' : '►'}</span>
-        <span class="mark" aria-hidden="true">&rarr;</span><span class="name">${g.label}</span>
+        <span class="mark" aria-hidden="true"><i class="shaft" style="width:${Math.max(14, Math.round(((quiet ? g.total : g.changing) / Math.max(1, this.items.length)) * 100))}%"></i></span><span class="name">${g.label}</span>
         <span class="pill">${quiet ? `${g.total} will not change` : `${g.changing} will change`}</span>
         ${g.excluded ? `<span class="exc">· ${g.excluded} excluded</span>` : ''}
       </button>
