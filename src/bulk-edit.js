@@ -31,7 +31,9 @@ const CSS = `
   /* Ordinal, not categorical: an ordered scale gets ordered colour. Every step clears
      3:1 on the ground, and adjacent steps are ~1.3x apart so the order is readable. */
   --be-scale-1:#2E2E2E; --be-scale-2:#454545; --be-scale-3:#5C5C5C;
-  --be-scale-4:#6E6E6E; --be-scale-5:#7E7E7E; --be-scale-6:#8C8C8C;      /* placeholder text */
+  --be-scale-4:#6E6E6E; --be-scale-5:#7E7E7E; --be-scale-6:#8C8C8C;
+  --be-cat-1:#3B5FA8; --be-cat-2:#A6681B; --be-cat-3:#5A6672;
+  --be-cat-4:#3E7A4E; --be-cat-5:#7A4A86; --be-cat-6:#A34A3D;      /* placeholder text */
   display:block; font:14px/1.5 ui-sans-serif, system-ui, sans-serif; color:var(--be-ink);
 }
 
@@ -49,6 +51,8 @@ const CSS = `
   /* teal reads as "go" without the traffic-light baggage of green */
   --be-scale-1:#0B3B37; --be-scale-2:#0E4F49; --be-scale-3:#11635B;
   --be-scale-4:#14776E; --be-scale-5:#178B81; --be-scale-6:#1A9F94;
+  --be-cat-1:#2F5E8F; --be-cat-2:#8A6212; --be-cat-3:#465562;
+  --be-cat-4:#2F6B4F; --be-cat-5:#5E4478; --be-cat-6:#8F4438;
   font:14.5px/1.55 "Inter var", Inter, ui-sans-serif, system-ui, sans-serif;
   letter-spacing:-0.006em;
 }
@@ -63,6 +67,21 @@ const CSS = `
 :host([theme="designed"]) .pill { background:transparent; border:0; padding:1px 0; color:var(--be-muted);
          font-variant-numeric:tabular-nums; }
 :host([theme="designed"]) .clamped .pill { color:var(--be-clamp); }
+/* Flow puts the information in the glyphs, so the chrome gets out of the way: the
+   operation is a sentence on the canvas, not a row of boxes inside a card. */
+:host([theme="designed"]) .bar { border:0; background:transparent; padding:2px 0 20px; }
+:host([theme="designed"]) select,
+:host([theme="designed"]) input[type=text] { border:0; border-bottom:1.5px solid var(--be-edge);
+         background:transparent; border-radius:0; padding:7px 2px; min-width:0;
+         font-weight:600; color:var(--be-ink); }
+:host([theme="designed"]) select:hover,
+:host([theme="designed"]) input[type=text]:hover { border-bottom-color:var(--be-ink); }
+:host([theme="designed"]) .apply { border-radius:7px; padding:11px 20px; font-weight:600;
+         letter-spacing:-0.005em; }
+:host([theme="designed"]) .chip { border-radius:999px; border-color:var(--be-edge); padding:5px 13px; }
+:host([theme="designed"]) .row { gap:10px; }
+:host([theme="designed"]) .track { height:9px; border-radius:5px; overflow:hidden; }
+:host([theme="designed"]) .seg { border-radius:0; }
 * { box-sizing:border-box; }
 button, input, select { font:inherit; color:inherit; }
 
@@ -236,8 +255,14 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 // Six unrelated hues for an ordered scale was Instrument's logic — the direction that
 // placed last, and that all five independent directions overruled. The scale is now an
 // ordinal ramp read from tokens, so a theme can restate it without touching this file.
-const COLORS = ['var(--be-scale-1)','var(--be-scale-2)','var(--be-scale-3)',
-                'var(--be-scale-4)','var(--be-scale-5)','var(--be-scale-6)'];
+const SCALE = ['var(--be-scale-1)','var(--be-scale-2)','var(--be-scale-3)',
+               'var(--be-scale-4)','var(--be-scale-5)','var(--be-scale-6)'];
+// Ordinal colour is only right for an ordered scale. 1d..90d is one; prod/staging/dev
+// is not, and ramping it would assert an order that does not exist — the same class of
+// lie as ramping unrelated hues over something that IS ordered.
+const CATEGORICAL = ['var(--be-cat-1)','var(--be-cat-2)','var(--be-cat-3)',
+                     'var(--be-cat-4)','var(--be-cat-5)','var(--be-cat-6)'];
+const paletteFor = field => (field?.type === 'number' ? SCALE : CATEGORICAL);
 
 export class BulkEdit extends HTMLElement {
   #state = { fieldKey: null, method: null, operand: null, excluded: new Set(), open: new Set(), showAll: new Set(), query: {} };
@@ -768,7 +793,7 @@ export class BulkEdit extends HTMLElement {
         ${ops.map((v, i) => {
           const have = pres.find(x => x.value === v)?.count ?? 0;
           return `<span class="mini">
-            <span class="track"><span class="seg" style="flex:${have};background:${COLORS[i % COLORS.length]}"></span
+            <span class="track"><span class="seg" style="flex:${have};background:${paletteFor(field)[i % 6]}"></span
               ><span class="seg rest" style="flex:${total - have}"></span></span>
             <span class="mlab"><b>${have.toLocaleString()}</b> of ${total.toLocaleString()} have ${v}</span>
           </span>`;
@@ -789,7 +814,8 @@ export class BulkEdit extends HTMLElement {
       ? [...head, { value: `${vals.length - MAX} other${vals.length - MAX === 1 ? '' : 's'}`, count: tailCount, other: true }]
       : vals;
 
-    const colour = (v, i) => v.other ? 'var(--be-control)' : COLORS[i % COLORS.length];
+    const pal = paletteFor(field);
+    const colour = (v, i) => v.other ? 'var(--be-control)' : pal[i % pal.length];
     const lbl = v => v.other || !field.unit ? fmt(v.value) : `${fmt(v.value)}${field.unit}`;
     return `<div class="dist">
       <div class="cap">Currently</div>
