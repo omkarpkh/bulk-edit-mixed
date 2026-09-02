@@ -10,6 +10,7 @@ import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, group
 
 const CSS = `
 :host {
+  --be-swatch-edge:#0003;   /* semi-transparent, so it reads over any swatch colour */
   /* Every value this component draws with is named here. A component in a
      portfolio about machine-readable design systems does not get to have
      anonymous colours. Override any of them from outside the shadow root. */
@@ -126,7 +127,12 @@ select, input[type=text] { border:1px solid var(--be-edge); background:var(--be-
 .dist .seg.rest { background:repeating-linear-gradient(45deg,#f0f0f0,#f0f0f0 3px,#e6e6e6 3px,#e6e6e6 6px); min-width:0; }
 .dist .keys { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:var(--be-t-sm); line-height:1.4; color:var(--be-muted); }
 .dist .keys b { color:var(--be-ink); font-weight:600; }
-.dist .keys i { font-style:normal; display:inline-block; width:7px; height:7px; margin-right:4px; border:1px solid #0003; }
+/* The swatch takes its shape from the theme's radius token rather than choosing
+   one. Square in the wireframe, round in the designed theme, without either
+   value being written here. Shape carries no information on this chart — there
+   is one mark type — so the only real cost is area: a circle shows ~79% of a
+   square's colour at this size, which is why the swatch is 8px and not 7. */
+.dist .keys i { font-style:normal; display:inline-block; width:8px; height:8px; margin-right:4px; border:1px solid var(--be-swatch-edge); border-radius:var(--be-r-full); }
 .dist .cap { font-size:var(--be-t-xs); letter-spacing:.09em; text-transform:uppercase; color:var(--be-faint); flex:0 0 auto; }
 
 .apply { margin-left:auto; border:1px solid var(--be-ink); background:var(--be-ink); color:var(--be-surface); padding:8px 15px; cursor:pointer; border-radius:var(--be-r-1); }
