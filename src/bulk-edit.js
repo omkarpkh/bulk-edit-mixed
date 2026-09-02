@@ -29,6 +29,11 @@ const CSS = `
   --be-edge:#b8b8b8;       /* disabled and inactive borders */
   --be-dim:#767676;        /* de-emphasised labels */
   --be-control:#c8c8c8;    /* control borders */
+  --be-sunk:#f6f6f6;       /* recessed ground: inset panels, progress track */
+  --be-disabled:#bbb;      /* text and glyphs that are inert, not merely quiet */
+  --be-row-selected:#f7f9fd;/* a row the operator has ticked */
+  --be-scrim:#0006;        /* the dim behind a modal sheet */
+  --be-body:#444;          /* body copy inside a card: softer than ink, darker than muted */
   --be-ghost:#767676;
   /* Ordinal, not categorical: an ordered scale gets ordered colour. Every step clears
      3:1 on the ground, and adjacent steps are ~1.3x apart so the order is readable. */
@@ -60,6 +65,8 @@ const CSS = `
   --be-ink:#0F172A; --be-surface:#FBFAFC; --be-muted:#475569; --be-faint:#5B6675;
   --be-hairline:#DCE3E8; --be-rule:#E9EEF2; --be-clamp:#B45309; --be-danger:#B3261E;
   --be-link:#1B5FBF; --be-edge:#C6D0D8; --be-dim:#475569; --be-control:#C6D0D8;
+  --be-sunk:#F1F5F8; --be-disabled:#A8B4BE; --be-row-selected:#EEF4FA;
+  --be-scrim:#0F172A66; --be-body:#334155;
   --be-ghost:#5B6675;
   --be-scale-1:#0B3B37; --be-scale-2:#0E4F49; --be-scale-3:#11635B;
   --be-scale-4:#14776E; --be-scale-5:#178B81; --be-scale-6:#1A9F94;
@@ -261,7 +268,7 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 .pick table { width:100%; }
 .pick th { position:sticky; top:0; background:var(--be-surface); box-shadow:0 1px 0 var(--be-rule); padding:8px 10px 7px 0; }
 .pick td { padding:6px 10px 6px 0; }
-.pick tr.on td { background:#f7f9fd; }
+.pick tr.on td { background:var(--be-row-selected); }
 .pick .pad { padding-left:14px; }
 .foot { display:flex; align-items:center; gap:12px; padding:10px 14px; border-top:1px solid var(--be-rule); font-size:var(--be-t-md); color:var(--be-muted); flex-wrap:wrap; }
 .foot .shows b { color:var(--be-ink); }
@@ -269,26 +276,26 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 .pager { margin-left:auto; display:flex; gap:3px; align-items:center; }
 .pnum { font:inherit; font-size:var(--be-t-md); border:1px solid transparent; background:none; color:var(--be-link); padding:3px 8px; cursor:pointer; border-radius:var(--be-r-1); }
 .pnum[aria-current=true] { border-color:var(--be-control); background:var(--be-surface); color:var(--be-ink); font-weight:600; }
-.pnum[disabled] { color:#ccc; cursor:default; }
-.pager .gap { color:#bbb; padding:0 2px; }
-.slot { border:1px dashed #c0c0c0; background:#fafafa; color:var(--be-dim); font-size:var(--be-t-md); padding:8px 11px; margin:10px 14px 12px; border-radius:var(--be-r-1); }
+.pnum[disabled] { color:var(--be-disabled); cursor:default; }
+.pager .gap { color:var(--be-disabled); padding:0 2px; }
+.slot { border:1px dashed var(--be-control); background:var(--be-sunk); color:var(--be-dim); font-size:var(--be-t-md); padding:8px 11px; margin:10px 14px 12px; border-radius:var(--be-r-1); }
 .backlink { font-size:var(--be-t-md); color:var(--be-muted); margin-bottom:10px; }
 .backlink a { color:var(--be-link); cursor:pointer; text-decoration:none; }
 
-.sheet { position:fixed; inset:0; background:#0006; display:flex; align-items:center; justify-content:center; padding:24px; border-radius:var(--be-r-2); }
+.sheet { position:fixed; inset:0; background:var(--be-scrim); display:flex; align-items:center; justify-content:center; padding:24px; border-radius:var(--be-r-2); }
 .card { background:var(--be-surface); border:1px solid var(--be-ink); max-width:520px; width:100%; padding:20px 22px; border-radius:var(--be-r-2); }
 .card h3 { margin:0 0 9px; font-size:var(--be-t-xl); }
-.card p { margin:0 0 11px; font-size:var(--be-t-lg); color:#444; }
-.card .list { font-size:var(--be-t-md); color:var(--be-muted); background:#f6f6f6; border:1px solid #eee; padding:8px 10px; margin-bottom:13px; max-height:120px; overflow:auto; }
+.card p { margin:0 0 11px; font-size:var(--be-t-lg); color:var(--be-body); }
+.card .list { font-size:var(--be-t-md); color:var(--be-muted); background:var(--be-sunk); border:1px solid var(--be-rule); padding:8px 10px; margin-bottom:13px; max-height:120px; overflow:auto; }
 .card .acts { display:flex; gap:9px; justify-content:flex-end; }
 .card button { border:1px solid var(--be-edge); background:var(--be-surface); padding:7px 14px; cursor:pointer; }
 .card button.go { background:var(--be-danger); border-color:var(--be-danger); color:var(--be-surface); }
-.card button.go[disabled] { background:var(--be-surface); color:#bbb; border-color:#ddd; cursor:default; }
+.card button.go[disabled] { background:var(--be-surface); color:var(--be-disabled); border-color:var(--be-hairline); cursor:default; }
 .confirm { display:flex; gap:7px; align-items:center; font-size:var(--be-t-lg); margin-bottom:14px; }
 .confirm input { width:150px; border:1px solid var(--be-edge); padding:5px 8px; }
 
 .progress { border:1px solid var(--be-hairline); background:var(--be-surface); padding:16px; border-radius:var(--be-r-2); }
-.progress .track { height:6px; background:#eee; margin:10px 0 8px; }
+.progress .track { height:6px; background:var(--be-sunk); margin:10px 0 8px; }
 .progress .fill { height:6px; background:var(--be-ink); transition:width var(--be-dur-1) var(--be-ease); }
 
 .result { border:1px solid var(--be-hairline); background:var(--be-surface); padding:16px; border-radius:var(--be-r-2); }
@@ -298,7 +305,7 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 .result .acts button { border:1px solid var(--be-ink); background:var(--be-ink); color:var(--be-surface); padding:7px 14px; cursor:pointer; }
 .result .acts button.ghost { background:var(--be-surface); color:var(--be-ink); }
 .fails { margin-top:11px; font-size:var(--be-t-lg); }
-.fails tr td { border-top:1px solid #f2f2f2; padding:5px 8px 5px 0; }
+.fails tr td { border-top:1px solid var(--be-rule); padding:5px 8px 5px 0; }
 .fails .why { color:var(--be-danger); font-size:var(--be-t-sm); }
 
 /* ---- operation lanes: the multi-operation surface ----
