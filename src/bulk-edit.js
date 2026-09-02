@@ -5,7 +5,8 @@
 // the model is wrong — there is no second place for it to go wrong.
 
 import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, groupByTransition,
-         reconcile, retryScope, describeResult } from './model.js?v=1787671470';
+         reconcile, retryScope, describeResult,
+         planBatch, describeBatch, phraseOp } from './model.js?v=1787671470';
 
 const CSS = `
 :host {
@@ -111,7 +112,16 @@ select, input[type=text] { border:1px solid var(--be-edge); background:var(--be-
 .arrow { color:var(--be-faint); }
 
 .dist { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.dist .track { display:flex; width:220px; height:9px; border:1px solid var(--be-control); overflow:hidden; flex:0 0 auto; }
+.dist .track { display:flex; gap:1px; background:var(--be-surface); width:220px; height:9px; border:1px solid var(--be-control); overflow:hidden; flex:0 0 auto; }
+/* Six categorical hues cannot all sit 3:1 from each other — mutual 3:1 needs
+   lightness separation, and lightness separation reads as ORDER in a set that
+   has none. Measured: every adjacent pair in this palette lands 1.14–1.40:1.
+   So the boundary is drawn rather than coloured. A 1px surface gap separates
+   every segment regardless of which two hues happen to be neighbours. */
+/* The floor is what stops a single host in a thousand rendering sub-pixel and
+   unhoverable. It does mean a segment at the floor overstates its share — so the
+   bar is presence below the floor and proportion above it, and the exact count
+   is the legend's job, never the bar's. */
 .dist .seg { min-width:3px; }
 .dist .seg.rest { background:repeating-linear-gradient(45deg,#f0f0f0,#f0f0f0 3px,#e6e6e6 3px,#e6e6e6 6px); min-width:0; }
 .dist .keys { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:var(--be-t-sm); line-height:1.4; color:var(--be-muted); }
@@ -284,6 +294,24 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 .fails { margin-top:11px; font-size:var(--be-t-lg); }
 .fails tr td { border-top:1px solid #f2f2f2; padding:5px 8px 5px 0; }
 .fails .why { color:var(--be-danger); font-size:var(--be-t-sm); }
+
+/* ---- operation lanes: the multi-operation surface ----
+   One lane per operation, all visible at once. The evaluator's reason for this
+   over tabs: an operation that does nothing is one you must be able to see
+   without going looking for it. */
+.lanes { border:1px solid var(--be-hairline); background:var(--be-surface); border-radius:var(--be-r-2); margin-bottom:12px; }
+.lane { display:flex; align-items:baseline; gap:11px; padding:11px 13px; border-bottom:1px solid var(--be-rule); }
+.lane:last-child { border-bottom:none; }
+.lane-n { font-size:var(--be-t-xs); color:var(--be-faint); flex:0 0 16px; }
+.lane-body { flex:1 1 auto; min-width:0; }
+.lane-op { font-size:var(--be-t-lg); color:var(--be-ink); }
+.lane.dead .lane-op { color:var(--be-muted); text-decoration:line-through; text-decoration-thickness:1px; }
+.lane-note { font-size:var(--be-t-sm); color:var(--be-muted); margin-top:3px; }
+.lane.dead .lane-note { color:var(--be-clamp); }
+.lane-x { flex:0 0 auto; border:0; background:none; color:var(--be-faint); cursor:pointer; font-size:var(--be-t-md); padding:2px 4px; line-height:1; }
+.lane-x:hover { color:var(--be-danger); }
+.equiv { font-size:var(--be-t-md); color:var(--be-ink); border-left:2px solid var(--be-clamp); padding:8px 12px; margin-bottom:14px; background:var(--be-surface); }
+.equiv b { font-weight:600; }
 `;
 
 // Six unrelated hues for an ordered scale was Instrument's logic — the direction that
@@ -299,7 +327,7 @@ const CATEGORICAL = ['var(--be-cat-1)','var(--be-cat-2)','var(--be-cat-3)',
 const paletteFor = field => (field?.type === 'number' ? SCALE : CATEGORICAL);
 
 export class BulkEdit extends HTMLElement {
-  #state = { fieldKey: null, method: null, operand: null, excluded: new Set(), open: new Set(), showAll: new Set(), query: {} };
+  #state = { fieldKey: null, method: null, operand: null, excluded: new Set(), open: new Set(), showAll: new Set(), query: {}, ops: [] };
   #phase = { name: 'browsing' };  // browsing | editing | confirming | committing | done
   #retryOnly = null;
 
@@ -371,6 +399,7 @@ export class BulkEdit extends HTMLElement {
     this.#state = {
       fieldKey: f.key, method: methodsFor(f)[0], operand: this.#defaultOperand(f, methodsFor(f)[0]),
       excluded: new Set(), open: new Set(), showAll: new Set(), query: {}, seededFor: null,
+      ops: [],   // a fresh selection starts with no banked operations
     };
     this.#phase = { name: 'browsing' };
   }
@@ -392,10 +421,41 @@ export class BulkEdit extends HTMLElement {
   }
 
   // The only place the interface is allowed to know anything.
+  // The operation being configured right now, or null while it is still incomplete.
+  // An operation with no value chosen is not an operation yet, and must not enter
+  // the batch — planBatch would reduce against a value the operator never set.
+  #currentOp() {
+    const field = this.#field, s = this.#state;
+    if (!field || this.#needsValue(field, s)) return null;
+    return { field, method: s.method, operand: s.operand };
+  }
+
+  // Every operation the batch is made of: the ones already added, plus the one
+  // being configured if it is complete.
+  #allOps() {
+    const cur = this.#currentOp();
+    return cur ? [...this.#state.ops, cur] : [...this.#state.ops];
+  }
+
   #compute() {
     const field = this.#field, { method, operand, excluded } = this.#state;
+    const ops = this.#allOps();
+
+    // One operation is the case this component was built for, and it keeps the
+    // path it already had — transition groups, and a plan() result the rest of
+    // the render tree already knows how to read.
     const p = plan(this.items, field, method, operand, excluded);
-    return { field, p, groups: groupByTransition(p, field, method, operand), current: summarise(this.items, field) };
+    const base = { field, p, groups: groupByTransition(p, field, method, operand), current: summarise(this.items, field) };
+    // The moment anything is banked, the batch is the truth — not the picker.
+    // Gating on ops.length >= 2 was wrong: with one banked operation and an empty
+    // picker, the preview and the apply button read the cleared picker and
+    // offered to change every host.
+    if (this.#state.ops.length === 0) return { ...base, ops, batch: null, reduction: null };
+
+    // Two or more, and the operation list becomes the primary surface. The model
+    // already answers this; nothing is counted here.
+    const batch = planBatch(this.items, ops, this.#state.excluded);
+    return { ...base, ops, batch, reduction: describeBatch(batch) };
   }
 
   connectedCallback() {
@@ -531,7 +591,7 @@ export class BulkEdit extends HTMLElement {
   #render(opts = {}) {
     const mark = this.#keep();
     if (this.#phase.name === 'browsing') { this.#renderPicker(opts); return this.#restore(mark); }
-    const { field, p, groups, current } = this.#compute();
+    const { field, p, groups, current, batch, reduction } = this.#compute();
     const s = this.#state;
     const methods = methodsFor(field);
     const destructive = DESTRUCTIVE.has(s.method);
@@ -560,25 +620,26 @@ export class BulkEdit extends HTMLElement {
             ${this.#operandHTML(field, s.method, s.operand)}
           </span>
 
-          <button class="apply ${destructive ? 'destructive' : ''}" data-act="apply" ${p.counts.changing && !this.#needsValue(field, s) ? '' : 'disabled'}>
-            Apply to ${p.counts.changing.toLocaleString()} host${p.counts.changing === 1 ? '' : 's'}
+          <button class="apply ${destructive ? 'destructive' : ''}" data-act="apply" ${(batch ? batch.counts.changing : p.counts.changing && !this.#needsValue(field, s)) ? '' : 'disabled'}>
+            Apply to ${(batch ? batch.counts.changing : p.counts.changing).toLocaleString()} host${(batch ? batch.counts.changing : p.counts.changing) === 1 ? '' : 's'}
           </button>
         </div>
         <div class="context">${this.#distHTML(current, field)}</div>
-        <div class="summary" role="status" aria-live="polite">${this.#needsValue(field, s) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
+        <div class="summary" role="status" aria-live="polite">${batch ? this.#summaryHTML(batch) : this.#needsValue(field, s) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
         ${destructive && p.counts.changing ? `<div class="warn">${METHOD_LABEL[s.method]} discards values that are not shown anywhere else.</div>` : ''}
-        <button class="addop" type="button" disabled
-          title="The model handles this — planBatch() reduces a list of operations to the shortest one with the same outcome, so two operations on the same field become a sentence the operator recognises rather than a conflict to resolve. The interface for it is not built yet.">
-          + Add another operation <span class="soon">not yet</span>
+        <button class="addop" type="button" data-act="addop" ${this.#currentOp() ? '' : 'disabled'}
+          title="Bank this operation and configure another. The batch is reduced to the shortest list with the same outcome.">
+          + Add another operation
         </button>
       </div>
 
       ${this.#phaseHTML(p)}
 
+      ${batch ? this.#lanesHTML(batch, reduction) : `
       <div class="label">Transition groups</div>
       ${this.#needsValue(field, s) ? '<div class="empty">Choose a value to see what would change.</div>'
         : groups.length ? groups.map((g, i) => this.#groupHTML(g, field, i === 0, i === groups.length - 1)).join('')
-        : '<div class="empty">Nothing selected.</div>'}
+        : '<div class="empty">Nothing selected.</div>'}`}
     `;
 
     this.#restore(mark);
@@ -717,6 +778,24 @@ export class BulkEdit extends HTMLElement {
   #act(name) {
     if (name === 'edit')   { this.#phase = { name: 'editing' }; this.#state.seededFor = null; return this.#render(); }
     if (name === 'reselect') { this.#phase = { name: 'browsing' }; return this.#render(); }
+
+    // Adding an operation banks the one being configured and clears the value,
+    // so the picker is immediately ready for the next one. The field and method
+    // stay put: the common case is a second operation on the same field, which
+    // is exactly the case the reduction exists to explain.
+    if (name === 'addop') {
+      const cur = this.#currentOp();
+      if (!cur) return;
+      this.#state.ops = [...this.#state.ops, cur];
+      this.#state.operand = this.#defaultOperand(cur.field, cur.method);
+      if (!this.#needsValue(cur.field, this.#state)) this.#state.operand = Array.isArray(this.#state.operand) ? [] : '';
+      return this.#render();
+    }
+    if (name.startsWith('rmop:')) {
+      const i = Number(name.slice(5));
+      this.#state.ops = this.#state.ops.filter((_, j) => j !== i);
+      return this.#render();
+    }
 
     const { p } = this.#compute();
     if (name === 'apply') {
@@ -894,6 +973,49 @@ export class BulkEdit extends HTMLElement {
     return `<span class="arrow" aria-hidden="true">→</span><select id="operand" aria-label="Value">
       ${opts.map(o => `<option value="${o}" ${String(o) === String(val) ? 'selected' : ''}>${o}</option>`).join('')}
     </select>`;
+  }
+
+
+  // The multi-operation surface. Direction B out of four evaluated: one lane per
+  // operation, all of them on screen at once. The evaluator's reason for it over
+  // a tabbed view — "a dead operation you must click a tab to discover is one you
+  // will not discover" — is the whole argument for the shape.
+  //
+  // Every number and every sentence here comes from planBatch()/describeBatch().
+  // Nothing on this surface decides whether an operation is redundant.
+  #lanesHTML(batch, reduction) {
+    const noteFor = i => (reduction?.notes ?? []).find(n => n.index === i);
+
+    const lanes = batch.ops.map(o => {
+      const note = noteFor(o.index);
+      const moved = o.total - o.alreadyMatched;
+      // A live operation still reports its own no-ops: "47 already match" is the
+      // same honesty the single-operation view gives, kept at operation level.
+      const live = o.alreadyMatched
+        ? `${moved.toLocaleString()} change &middot; ${o.alreadyMatched.toLocaleString()} already match`
+        : `${moved.toLocaleString()} change`;
+      return `
+        <div class="lane ${o.dead ? 'dead' : ''}">
+          <span class="lane-n">${o.index + 1}</span>
+          <span class="lane-body">
+            <span class="lane-op">${phraseOp(o)}</span>
+            <span class="lane-note">${note ? note.text.replace(/^.*? changes nothing &mdash; /, 'Changes nothing — ').replace(/^.*?changes nothing — /, 'Changes nothing — ') : live}</span>
+          </span>
+          <button class="lane-x" type="button" data-act="rmop:${o.index}"
+                  aria-label="Remove operation ${o.index + 1}: ${phraseOp(o)}">&times;</button>
+        </div>`;
+    }).join('');
+
+    // The reduction is offered, never enforced. Nothing is blocked and no ordering
+    // is chosen for the operator — it is the same batch said in fewer words.
+    const equiv = reduction?.reducible
+      ? `<div class="equiv" role="status" aria-live="polite">Same as: <b>${reduction.equivalent}</b></div>`
+      : '';
+
+    return `
+      <div class="label">Operations &middot; ${batch.ops.length}</div>
+      <div class="lanes">${lanes}</div>
+      ${equiv}`;
   }
 
   #groupHTML(g, field, isFirst = false, isLast = false) {
