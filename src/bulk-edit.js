@@ -8,6 +8,36 @@ import { summarise, methodsFor, METHOD_LABEL, DESTRUCTIVE, plan, describe, group
          reconcile, retryScope, describeResult,
          planBatch, describeBatch, phraseOp } from './model.js?v=1787671470';
 
+// Dark is a fourth palette, not a filter over the third. The ordered scale has to
+// run dim-to-bright instead of dark-to-light, and the six categorical hues were
+// chosen against white — cat-1 measured 2.67:1 on a dark ground, below the 3:1
+// WCAG 1.4.11 asks of a graphic that carries meaning. Both sets are declared once
+// so the media query and the explicit override cannot drift apart.
+const DARK_WIREFRAME = `--be-ink:#EBECEE; --be-surface:#1C1F24; --be-body:#C7CAD1; --be-muted:#9BA0A8;
+  --be-faint:#8F959E; --be-dim:#8F959E; --be-ghost:#8F959E;
+  --be-hairline:#363B43; --be-rule:#2A2E35; --be-edge:#828A94; --be-control:#6E757E;
+  --be-disabled:#565C65; --be-sunk:#24282F; --be-quiet:#1F2229; --be-quiet-mark:#2B2F37;
+  --be-quiet-mark-2:#363B44; --be-tint:#1E2530; --be-hover:#262E3A; --be-row-selected:#222834;
+  --be-chip:#28303F; --be-chip-edge:#3C4657; --be-scrim:#000000A6; --be-swatch-edge:#FFFFFF33;
+  --be-link:#7FB2FF; --be-clamp:#E8A33D; --be-danger:#FF6B5E; --be-danger-soft:#3A211F;
+  --be-ok:#5FC97F; --be-drift:#D9A44A;
+  --be-scale-1:#6A6A6A; --be-scale-2:#828282; --be-scale-3:#9A9A9A;
+  --be-scale-4:#B0B0B0; --be-scale-5:#C6C6C6; --be-scale-6:#DCDCDC;
+  --be-cat-1:#7DA5F0; --be-cat-2:#E0A34A; --be-cat-3:#A3AFBD;
+  --be-cat-4:#6FBE83; --be-cat-5:#BE8ECC; --be-cat-6:#EE8A7A;`;
+const DARK_DESIGNED  = `--be-ink:#E6EDF3; --be-surface:#161B22; --be-body:#C3CDD9; --be-muted:#9AA7B4;
+  --be-faint:#8B98A6; --be-dim:#8B98A6; --be-ghost:#8B98A6;
+  --be-hairline:#2C333D; --be-rule:#232A33; --be-edge:#7E8996; --be-control:#6A7480;
+  --be-disabled:#525C69; --be-sunk:#1C222B; --be-quiet:#191F27; --be-quiet-mark:#232B35;
+  --be-quiet-mark-2:#2E3742; --be-tint:#172029; --be-hover:#1E2833; --be-row-selected:#1B2430;
+  --be-chip:#202B3A; --be-chip-edge:#334155; --be-scrim:#010409B3; --be-swatch-edge:#FFFFFF2E;
+  --be-link:#79B8FF; --be-clamp:#E3A345; --be-danger:#FF7B72; --be-danger-soft:#3A1D1B;
+  --be-ok:#56D364; --be-drift:#D8A657;
+  --be-scale-1:#2F8F86; --be-scale-2:#3AA79C; --be-scale-3:#46BEB2;
+  --be-scale-4:#57D0C4; --be-scale-5:#78DFD5; --be-scale-6:#9DEDE5;
+  --be-cat-1:#79A6F2; --be-cat-2:#DDA23F; --be-cat-3:#9FB0C2;
+  --be-cat-4:#63C489; --be-cat-5:#C08FD4; --be-cat-6:#F08A78;`;
+
 const CSS = `
 :host {
   --be-swatch-edge:#0003;   /* semi-transparent, so it reads over any swatch colour */
@@ -17,7 +47,7 @@ const CSS = `
   --be-ink:#1a1a1a;      /* body text and solid controls */
   --be-surface:#fff;  /* card and control ground */
   --be-muted:#666;    /* secondary text */
-  --be-faint:#767676;
+  --be-faint:#6A6A6A;
   /* faint, dim and ghost hold the same value on purpose. All three carry text, so all
      three are floored at 4.5:1 on white — and above that floor there is not enough
      room left for three visually distinct greys. The scale is three levels, not five. */    /* tertiary text and carets */
@@ -26,15 +56,31 @@ const CSS = `
   --be-clamp:#B45309;    /* the system intervened — AA on white */
   --be-danger:#8a2318;   /* destructive */
   --be-link:#1a5fb4;     /* links and the changed value */
-  --be-edge:#b8b8b8;       /* disabled and inactive borders */
-  --be-dim:#767676;        /* de-emphasised labels */
-  --be-control:#c8c8c8;    /* control borders */
+  --be-edge:#7E7E7E;       /* disabled and inactive borders */
+  --be-dim:#6A6A6A;        /* de-emphasised labels */
+  --be-control:#949494;    /* control borders */
   --be-sunk:#f6f6f6;       /* recessed ground: inset panels, progress track */
   --be-disabled:#bbb;      /* text and glyphs that are inert, not merely quiet */
   --be-row-selected:#f7f9fd;/* a row the operator has ticked */
   --be-scrim:#0006;        /* the dim behind a modal sheet */
-  --be-body:#444;          /* body copy inside a card: softer than ink, darker than muted */
-  --be-ghost:#767676;
+  --be-body:#444;
+  /* Surfaces that recede. --be-sunk is an inset panel; --be-quiet is a whole group
+     the operator has been told not to worry about, and --be-quiet-mark is a chip
+     or stripe drawn on top of one. */
+  --be-quiet:#fafafa;
+  --be-quiet-mark:#f0f0f0;
+  --be-quiet-mark-2:#e6e6e6;
+  /* Tinted rather than grey: these say "informational", not "inactive". */
+  --be-tint:#f7f9fd;
+  --be-hover:#f4f6fb;
+  --be-chip:#eef;
+  --be-chip-edge:#dde;
+  /* Named states. --be-drift is not --be-clamp: a clamp is the system refusing a
+     value; drift is a value that moved when nobody asked. */
+  --be-danger-soft:#fbf2f0;
+  --be-ok:#2f6b3f;
+  --be-drift:#8a5a18;          /* body copy inside a card: softer than ink, darker than muted */
+  --be-ghost:#6A6A6A;
   /* Ordinal, not categorical: an ordered scale gets ordered colour. Every step clears
      3:1 on the ground, and adjacent steps are ~1.3x apart so the order is readable. */
   --be-scale-1:#2E2E2E; --be-scale-2:#454545; --be-scale-3:#5C5C5C;
@@ -64,7 +110,7 @@ const CSS = `
      square while .apply went round, because I set the corner by hand on one of them. */
   --be-ink:#0F172A; --be-surface:#FBFAFC; --be-muted:#475569; --be-faint:#5B6675;
   --be-hairline:#DCE3E8; --be-rule:#E9EEF2; --be-clamp:#B45309; --be-danger:#B3261E;
-  --be-link:#1B5FBF; --be-edge:#C6D0D8; --be-dim:#475569; --be-control:#C6D0D8;
+  --be-link:#1B5FBF; --be-edge:#75828F; --be-dim:#475569; --be-control:#838F9C;
   --be-sunk:#F1F5F8; --be-disabled:#A8B4BE; --be-row-selected:#EEF4FA;
   --be-scrim:#0F172A66; --be-body:#334155;
   --be-ghost:#5B6675;
@@ -78,7 +124,22 @@ const CSS = `
   --be-t-xs:10.5px; --be-t-sm:12px; --be-t-md:13px; --be-t-lg:14px; --be-t-xl:15.5px;
   font:14.5px/1.55 "Inter var", Inter, ui-sans-serif, system-ui, sans-serif;
   letter-spacing:-0.006em;
+
+  /* The eleven the designed theme had never claimed. Left inheriting, they were the
+     wireframe's greys sitting inside a designed surface. */
+  --be-quiet:#F5F7F9; --be-quiet-mark:#E8EDF1; --be-quiet-mark-2:#DCE3E8;
+  --be-tint:#F1F5FA; --be-hover:#EAF1F8; --be-chip:#E9EFF7; --be-chip-edge:#CFDAE6;
+  --be-danger-soft:#FBEDEB; --be-ok:#256B4A; --be-drift:#8A5A18; --be-swatch-edge:#0F172A2E;
 }
+
+/* prefers-color-scheme covers the system default and standalone use; scheme="dark"
+   or scheme="light" lets a host page with its own toggle force either one. */
+@media (prefers-color-scheme: dark) {
+  :host(:not([scheme="light"])) { ${DARK_WIREFRAME} }
+  :host([theme="designed"]:not([scheme="light"])) { ${DARK_DESIGNED} }
+}
+:host([scheme="dark"]) { ${DARK_WIREFRAME} }
+:host([theme="designed"][scheme="dark"]) { ${DARK_DESIGNED} }
 /* The rest is structure, not values — a card removed, a column widened, a control
    unboxed. None of it can be expressed as a number, which is how you tell the two apart. */
 :host([theme="designed"]) .bar { border:0; background:transparent; padding:2px 0 20px; }
@@ -100,6 +161,10 @@ const CSS = `
 :host([theme="designed"]) .clamped .pill { color:var(--be-clamp); }
 :host([theme="designed"]) select,
 :host([theme="designed"]) input[type=text] { border:0; border-bottom:1.5px solid var(--be-edge);
+  /* The radius belonged to the box this theme removes. Left on a lone bottom border
+     it sweeps the line upward at both ends into a hook — 12% of the field control's
+     underline, and 33% of the narrow value input's. A rule has no corners. */
+  border-radius:0;
          background:transparent; padding:7px 2px; min-width:0; font-weight:600; color:var(--be-ink); }
 :host([theme="designed"]) select:hover,
 :host([theme="designed"]) input[type=text]:hover { border-bottom-color:var(--be-ink); }
@@ -131,7 +196,7 @@ select, input[type=text] { border:1px solid var(--be-edge); background:var(--be-
    bar is presence below the floor and proportion above it, and the exact count
    is the legend's job, never the bar's. */
 .dist .seg { min-width:3px; }
-.dist .seg.rest { background:repeating-linear-gradient(45deg,#f0f0f0,#f0f0f0 3px,#e6e6e6 3px,#e6e6e6 6px); min-width:0; }
+.dist .seg.rest { background:repeating-linear-gradient(45deg,var(--be-quiet-mark),var(--be-quiet-mark) 3px,var(--be-quiet-mark-2) 3px,var(--be-quiet-mark-2) 6px); min-width:0; }
 .dist .keys { display:flex; gap:4px 12px; flex-wrap:wrap; font-size:var(--be-t-sm); line-height:1.4; color:var(--be-muted); }
 .dist .keys b { color:var(--be-ink); font-weight:600; }
 /* The swatch takes its shape from the theme's radius token rather than choosing
@@ -143,13 +208,17 @@ select, input[type=text] { border:1px solid var(--be-edge); background:var(--be-
 .dist .cap { font-size:var(--be-t-xs); letter-spacing:.09em; text-transform:uppercase; color:var(--be-faint); flex:0 0 auto; }
 
 .apply { margin-left:auto; border:1px solid var(--be-ink); background:var(--be-ink); color:var(--be-surface); padding:8px 15px; cursor:pointer; border-radius:var(--be-r-1); }
-.apply[disabled] { background:var(--be-surface); color:var(--be-faint); border-color:#ccc; cursor:default; }
+.apply[disabled] { background:var(--be-surface); color:var(--be-faint); border-color:var(--be-control); cursor:default; }
 .apply.destructive { background:var(--be-danger); border-color:var(--be-danger); }
 
-.summary { margin-top:9px; font-size:var(--be-t-lg); color:#444; }
+.summary { margin-top:9px; font-size:var(--be-t-lg); color:var(--be-body); }
 .summary b { color:var(--be-ink); }
-.warn { margin-top:8px; font-size:var(--be-t-sm); border-left:3px solid var(--be-danger); padding:5px 9px; color:var(--be-danger); background:#fbf2f0; border-radius:var(--be-r-2); }
-.unit { font-size:var(--be-t-md); color:#777; margin-left:-4px; }
+/* A border that exists on only one edge must not be rounded at that edge — the
+   radius clips the bar into a hook instead of ending it. Three rules had this:
+   one accent bar and two separators. .equiv is the same accent-bar pattern and
+   never hooked, only because it happened to declare no radius at all. */
+.warn { margin-top:8px; font-size:var(--be-t-sm); border-left:3px solid var(--be-danger); padding:5px 9px; color:var(--be-danger); background:var(--be-danger-soft); border-radius:0 var(--be-r-2) var(--be-r-2) 0; }
+.unit { font-size:var(--be-t-md); color:var(--be-faint); margin-left:-4px; }
 .multi-dist { align-items:flex-start; }
 .multi-dist .mini { display:flex; align-items:center; gap:9px; }
 .multi-dist .track { width:120px; }
@@ -160,15 +229,15 @@ select, input[type=text] { border:1px solid var(--be-edge); background:var(--be-
   background:var(--be-surface); padding:4px 8px; font:inherit; cursor:pointer; text-align:left; flex-wrap:wrap; }
 .multi-btn .ph { color:var(--be-faint); }
 .multi-btn .caret { margin-left:auto; color:var(--be-dim); font-size:var(--be-t-xs); }
-.vchip { background:#eef; border:1px solid #dde; font-size:var(--be-t-sm); padding:1px 6px; border-radius:var(--be-r-1); }
+.vchip { background:var(--be-chip); border:1px solid var(--be-chip-edge); font-size:var(--be-t-sm); padding:1px 6px; border-radius:var(--be-r-1); }
 .multi-menu { position:absolute; top:calc(100% + 3px); left:0; z-index:5; min-width:190px; max-height:210px; overflow:auto;
   background:var(--be-surface); border:1px solid var(--be-edge); box-shadow:var(--be-shadow-2); padding:5px 0; }
 .mrow { display:flex; align-items:center; gap:8px; padding:5px 11px; font-size:var(--be-t-lg); cursor:pointer; }
-.mrow:hover { background:#f4f6fb; }
+.mrow:hover { background:var(--be-hover); }
 .addop { margin-top:7px; font-size:var(--be-t-md); color:var(--be-ghost); background:none; border:0; padding:0; font-family:inherit;
   cursor:default; display:inline-flex; align-items:center; gap:7px; }
 .addop .soon { font-size:var(--be-t-xs); letter-spacing:.09em; text-transform:uppercase; color:var(--be-faint);
-  border:1px dashed #cfcfcf; padding:1px 6px; }
+  border:1px dashed var(--be-control); padding:1px 6px; }
 .ghead { width:100%; text-align:left; background:none; border:0; font:inherit; }
 .ghead:focus-visible, .chip:focus-visible, .go-edit:focus-visible, .apply:focus-visible,
 input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:2px solid var(--be-link); outline-offset:1px; }
@@ -176,9 +245,7 @@ input:focus-visible, select:focus-visible, .strip-fix a:focus-visible { outline:
 .label { font-size:var(--be-t-xs); letter-spacing:.09em; text-transform:uppercase; color:var(--be-dim); margin:20px 0 7px; }
 
 .group { border:1px solid var(--be-hairline); background:var(--be-surface); margin-bottom:9px; border-radius:var(--be-r-2); }
-kbd { font:inherit; font-size:var(--be-t-xs); border:1px solid var(--be-control); border-bottom-width:2px;
-      padding:0 4px; color:var(--be-muted); background:#fafafa; }
-.group.quiet { background:#fafafa; border-color:#e4e4e4; }
+.group.quiet { background:var(--be-quiet); border-color:var(--be-rule); }
 /* The arrow is only on the clamped row now. Three findings put it there: a clamp is
    reachable in one of five common operations, real group sets are often two rows and
    not three, and in the built component it sat ten pixels from a disclosure caret that
@@ -201,12 +268,12 @@ kbd { font:inherit; font-size:var(--be-t-xs); border:1px solid var(--be-control)
 @media (prefers-reduced-motion:reduce) { .shaft { transition:none; } }
 .clamped .ghead .name { color:var(--be-clamp); }
 .ghead { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; user-select:none; }
-.ghead .caret { position:relative; width:10px; height:10px; flex:0 0 10px; }
-.ghead .caret::before { content:''; position:absolute; left:1px; top:2px; width:5px; height:5px;
+.ghead .caret, .lcaret .caret { position:relative; width:10px; height:10px; flex:0 0 10px; }
+.ghead .caret::before, .lcaret .caret::before { content:''; position:absolute; left:1px; top:2px; width:5px; height:5px;
         border-right:1.5px solid var(--be-faint); border-bottom:1.5px solid var(--be-faint);
         transform:rotate(-45deg); transform-origin:60% 60%;
         transition:transform var(--be-dur-1) var(--be-ease); }
-.ghead[aria-expanded="true"] .caret::before { transform:rotate(45deg); }
+.ghead[aria-expanded="true"] .caret::before, .lcaret[aria-expanded="true"] .caret::before { transform:rotate(45deg); }
 .clamped .ghead .caret::before { border-color:var(--be-clamp); }
 /* Same chevron on the value picker, but a dropdown points down when closed, not right. */
 .multi-btn .caret { position:relative; width:10px; height:10px; flex:0 0 10px; }
@@ -217,15 +284,15 @@ kbd { font:inherit; font-size:var(--be-t-xs); border:1px solid var(--be-control)
 @media (prefers-reduced-motion:reduce) { .ghead .caret::before { transition:none; } }
 .ghead .name { font-weight:600; }
 .group.quiet .ghead .name { font-weight:400; color:var(--be-ink); }
-.pill { font-size:var(--be-t-sm); background:#eef; border:1px solid #dde; padding:1px 8px; }
-.group.quiet .pill { background:#f0f0f0; border-color:var(--be-hairline); color:var(--be-ink); }
+.pill { font-size:var(--be-t-sm); background:var(--be-chip); border:1px solid var(--be-chip-edge); padding:1px 8px; }
+.group.quiet .pill { background:var(--be-quiet-mark); border-color:var(--be-hairline); color:var(--be-ink); }
 .exc { font-size:var(--be-t-sm); color:var(--be-faint); }
-.gbody { border-top:1px solid var(--be-rule); padding:11px 14px 13px; border-radius:var(--be-r-2); }
+.gbody { border-top:1px solid var(--be-rule); padding:11px 14px 13px; border-radius:0 0 var(--be-r-2) var(--be-r-2); }
 
 .search { width:250px; margin-bottom:10px; }
 table { width:100%; border-collapse:collapse; font-size:var(--be-t-lg); }
 th { text-align:left; font-size:var(--be-t-xs); letter-spacing:.07em; text-transform:uppercase; color:var(--be-faint); font-weight:400; padding:0 8px 6px 0; }
-td { padding:5px 8px 5px 0; border-top:1px solid #f2f2f2; }
+td { padding:5px 8px 5px 0; border-top:1px solid var(--be-rule); }
 tr.skipped td { color:var(--be-ghost); }
 tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 .before { color:var(--be-dim); }
@@ -241,23 +308,23 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 .chip { font-size:var(--be-t-md); border:1px solid var(--be-control); background:var(--be-surface); padding:4px 11px; cursor:pointer; border-radius:var(--be-r-1); }
 .chip[aria-pressed=true] { background:var(--be-ink); color:var(--be-surface); border-color:var(--be-ink); }
 .chip.sel { margin-left:6px; }
-.matchcount { margin-left:auto; font-size:var(--be-t-md); color:#777; }
-.strip { border-bottom:1px solid var(--be-rule); background:#f7f9fd; border-radius:var(--be-r-2); }
+.matchcount { margin-left:auto; font-size:var(--be-t-md); color:var(--be-faint); }
+.strip { border-bottom:1px solid var(--be-rule); background:var(--be-tint); border-radius:var(--be-r-2) var(--be-r-2) 0 0; }
 .strip-main { display:flex; align-items:center; gap:12px; padding:10px 14px; font-size:var(--be-t-lg); }
-.strip-main .tick { color:#2f6b3f; }
+.strip-main .tick { color:var(--be-ok); }
 .strip-main b { font-weight:600; }
 .scope-ctl { display:flex; align-items:center; gap:7px; margin-left:6px; }
 .scope-lbl { font-size:var(--be-t-xs); letter-spacing:.09em; text-transform:uppercase; color:var(--be-dim); }
 .scope-ctl select { border:1px solid var(--be-edge); background:var(--be-surface); padding:5px 8px; font-size:var(--be-t-lg); max-width:330px; }
 .strip .go-edit { margin-left:auto; }
-.strip-note { padding:0 14px 10px 32px; font-size:var(--be-t-md); color:#777; }
-.strip-note .drift { color:#8a5a18; }
+.strip-note { padding:0 14px 10px 32px; font-size:var(--be-t-md); color:var(--be-faint); }
+.strip-note .drift { color:var(--be-drift); }
 .strip-fix { padding:0 14px 11px 32px; font-size:var(--be-t-md); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .strip-fix a { color:var(--be-link); cursor:pointer; text-decoration:none; }
 .strip-fix a:hover { text-decoration:underline; }
-.strip-fix .sep { color:#ccc; }
+.strip-fix .sep { color:var(--be-control); }
 .go-edit { border:1px solid var(--be-ink); background:var(--be-ink); color:var(--be-surface); padding:7px 14px; cursor:pointer; border-radius:var(--be-r-1); }
-.go-edit[disabled] { background:var(--be-surface); color:var(--be-ghost); border-color:#ddd; cursor:default; }
+.go-edit[disabled] { background:var(--be-surface); color:var(--be-ghost); border-color:var(--be-control); cursor:default; }
 .pick .rows { max-height:380px; overflow:auto; }
 /* On a phone the inner 380px scroller is a trap: a finger scrolling the page hits it
    and pans thousands of pixels of rows instead. Let the page own vertical scrolling,
@@ -277,7 +344,7 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
 .pnum { font:inherit; font-size:var(--be-t-md); border:1px solid transparent; background:none; color:var(--be-link); padding:3px 8px; cursor:pointer; border-radius:var(--be-r-1); }
 .pnum[aria-current=true] { border-color:var(--be-control); background:var(--be-surface); color:var(--be-ink); font-weight:600; }
 .pnum[disabled] { color:var(--be-disabled); cursor:default; }
-.pager .gap { color:var(--be-disabled); padding:0 2px; }
+.pager .gap { color:var(--be-dim); padding:0 2px; }
 .slot { border:1px dashed var(--be-control); background:var(--be-sunk); color:var(--be-dim); font-size:var(--be-t-md); padding:8px 11px; margin:10px 14px 12px; border-radius:var(--be-r-1); }
 .backlink { font-size:var(--be-t-md); color:var(--be-muted); margin-bottom:10px; }
 .backlink a { color:var(--be-link); cursor:pointer; text-decoration:none; }
@@ -313,17 +380,74 @@ tr.skipped .after { color:var(--be-ghost); font-weight:400; }
    over tabs: an operation that does nothing is one you must be able to see
    without going looking for it. */
 .lanes { border:1px solid var(--be-hairline); background:var(--be-surface); border-radius:var(--be-r-2); margin-bottom:12px; }
-.lane { display:flex; align-items:baseline; gap:11px; padding:11px 13px; border-bottom:1px solid var(--be-rule); }
+.lane { border-bottom:1px solid var(--be-rule); position:relative; }
+/* Which row the dropdowns above are pointed at. A left edge rather than a fill:
+   the row's own dead/live colouring still has to read through it. */
+.lane.editing::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--be-link); }
+.lane-edit { font-size:var(--be-t-xs); letter-spacing:.07em; text-transform:uppercase; color:var(--be-link); margin-left:8px; }
+.lane-row { display:flex; align-items:baseline; gap:0; }
+.lcaret { flex:0 0 auto; display:flex; align-items:center; padding:11px 4px 11px 13px;
+          background:none; border:0; cursor:pointer; }
+.lhead { flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:11px; padding:11px 9px 11px 7px;
+         background:none; border:0; font:inherit; color:inherit; text-align:left; cursor:pointer; }
+.lane-detail { padding:2px 13px 12px 47px; }
+.ld-head { font-size:var(--be-t-xs); letter-spacing:.06em; text-transform:uppercase; color:var(--be-faint); margin-bottom:7px; }
+.ld-row { display:flex; align-items:baseline; gap:10px; padding:6px 0; font-size:var(--be-t-sm); }
+/* Between, not around: the lane already has an outer border, and once one row is
+   expanded the three run together without a rule to hold them apart. */
+.ld-row + .ld-row { border-top:1px solid var(--be-rule); }
+.ld-row.quiet .ld-t, .ld-row.quiet .ld-n { color:var(--be-muted); }
+.ld-t { flex:0 0 auto; min-width:150px; color:var(--be-ink); }
+.ld-arrow { color:var(--be-faint); padding:0 2px; }
+.ld-n { flex:0 0 52px; text-align:right; color:var(--be-ink); font-variant-numeric:tabular-nums; }
+.ld-s-wrap { flex:1 1 auto; min-width:0; color:var(--be-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Expanded in place rather than behind a third caret: the names are for checking,
+   and a bounded scroll keeps a 123-host list from becoming the page. The toggle
+   sits OUTSIDE that scroll box — inside it, "show fewer" was at the bottom of
+   778px of names clipped to 104px, so expanding was a one-way door. */
+.ld-s-wrap.open { white-space:normal; overflow:visible; text-overflow:clip; }
+.ld-s-wrap.open .ld-s { display:block; max-height:104px; overflow-y:auto; line-height:1.65;
+  border-left:2px solid var(--be-rule); padding-left:9px; }
+.ld-s-wrap.open .ld-more { display:inline-block; margin-top:6px; }
+.ld-more { background:none; border:0; padding:0; font:inherit; color:var(--be-link); cursor:pointer; white-space:nowrap; }
+.ld-more:hover { text-decoration:underline; }
+.ld-undo { flex:0 0 auto; color:var(--be-clamp); }
 .lane:last-child { border-bottom:none; }
 .lane-n { font-size:var(--be-t-xs); color:var(--be-faint); flex:0 0 16px; }
 .lane-body { flex:1 1 auto; min-width:0; }
 .lane-op { font-size:var(--be-t-lg); color:var(--be-ink); }
 .lane.dead .lane-op { color:var(--be-muted); text-decoration:line-through; text-decoration-thickness:1px; }
 .lane-note { font-size:var(--be-t-sm); color:var(--be-muted); margin-top:3px; }
+.label-note { color:var(--be-faint); text-transform:none; letter-spacing:0; margin-left:9px; }
+.pickhint { font-size:var(--be-t-sm); color:var(--be-faint); margin-top:5px; }
 .lane.dead .lane-note { color:var(--be-clamp); }
-.lane-x { flex:0 0 auto; border:0; background:none; color:var(--be-faint); cursor:pointer; font-size:var(--be-t-md); padding:2px 4px; line-height:1; }
-.lane-x:hover { color:var(--be-danger); }
-.equiv { font-size:var(--be-t-md); color:var(--be-ink); border-left:2px solid var(--be-clamp); padding:8px 12px; margin-bottom:14px; background:var(--be-surface); }
+.lane-x { flex:0 0 auto; border:0; background:none; color:var(--be-faint); cursor:pointer; font-size:var(--be-t-md);
+  /* Matches .lhead's 13px so the glyph is inset from the border by the same amount
+     the row's text is, instead of sitting 1px off it. Also gives it a real hit area. */
+  padding:11px 13px; line-height:1; }
+.lane-x:hover { color:var(--be-danger); transform:scale(1.12); }
+
+/* Hover is the one kind of motion this component can express in CSS: hovering does
+   not re-render, so the element is still there and a transition has a from-state.
+   Only where the affordance is genuinely unstated — a whole lane row became
+   clickable and said nothing about it. */
+.lane-row, .ghead, .addop, .chip, .multi-btn, .lane-x, .go-edit {
+  transition:background var(--be-dur-1) var(--be-ease), color var(--be-dur-1) var(--be-ease),
+             border-color var(--be-dur-1) var(--be-ease), transform var(--be-dur-1) var(--be-ease);
+}
+.lane-row:hover { background:var(--be-hover); }
+.lane.editing .lane-row:hover { background:transparent; }   /* selection already says it */
+.lcaret:hover .caret::before { border-color:var(--be-ink); }
+.ghead:hover { background:var(--be-hover); }
+.addop:hover { color:var(--be-link); }
+.chip:hover { border-color:var(--be-edge); color:var(--be-ink); }
+.multi-btn:hover { border-color:var(--be-ink); }
+.go-edit:not([disabled]):hover { transform:translateY(-1px); }
+@media (prefers-reduced-motion:reduce) {
+  .lane-row, .ghead, .addop, .chip, .multi-btn, .lane-x, .go-edit { transition:none; }
+  .lane-x:hover, .go-edit:not([disabled]):hover { transform:none; }
+}
+.equiv { font-size:var(--be-t-md); color:var(--be-ink); border-left:2px solid var(--be-clamp); padding:8px 12px; margin-bottom:14px; background:var(--be-surface); border-radius:0 var(--be-r-2) var(--be-r-2) 0; }
 .equiv b { font-weight:600; }
 `;
 
@@ -409,15 +533,60 @@ export class BulkEdit extends HTMLElement {
 
   #reset() {
     const f = this.fields[0];
+    const m0 = methodsFor(f)[0];
     this.#state = {
-      fieldKey: f.key, method: methodsFor(f)[0], operand: this.#defaultOperand(f, methodsFor(f)[0]),
+      // Every operation lives here, including the one the picker is editing. There
+      // is no separate pending slot: that duality is what made a configured
+      // operation vanish when you changed the field, and it produced every
+      // multi-operation bug this component has had.
+      ops: [{ fieldKey: f.key, method: m0, operand: this.#defaultOperand(f, m0), touched: false }],
+      editing: 0,
       excluded: new Set(), open: new Set(), showAll: new Set(), query: {}, seededFor: null,
-      ops: [],   // a fresh selection starts with no banked operations
+      openOps: new Set(),
+      openSamples: new Set(),
     };
     this.#phase = { name: 'browsing' };
   }
 
-  get #field() { return this.fields.find(f => f.key === this.#state.fieldKey); }
+  // The row the dropdowns are pointed at.
+  get #cur() { return this.#state.ops[this.#state.editing] ?? this.#state.ops[0]; }
+  get #field() { return this.fields.find(f => f.key === this.#cur?.fieldKey); }
+
+  #opAt(o) { return { field: this.fields.find(f => f.key === o.fieldKey), method: o.method, operand: o.operand }; }
+
+  // Only the row you start with is provisional: switching fields reuses it, so
+  // browsing at the outset leaves nothing behind. Every row created after that is
+  // committed the moment it exists, because you only get one by deliberately
+  // leaving a configured operation — and then it stays until its × is clicked.
+  // The ceiling is not the number of fields — Tags alone affords four operations
+  // and retention three. It is the field x method pairs, and only when every one
+  // of them has a row can this button do nothing but repeat itself.
+  // One operation per field, with one exception. A second operation on a value is
+  // never a goal: a second Set overrides the first, Enable then Disable cancels,
+  // and Decrease 7 then Increase 3 is just Decrease 4 — the model tolerates all of
+  // them and calls them dead, but offering them invites the operator to build
+  // something they did not mean. A multi-value field is different because it holds
+  // a set, not a value: add one tag and remove another is a single retag intent
+  // that cannot be said any other way. Replace and Clear already own the whole set,
+  // so they take no partner.
+  #freeMethodOn(f) {
+    const on = this.#state.ops.filter(o => o.fieldKey === f.key);
+    if (!on.length) return methodsFor(f)[0];
+    if (f.type !== 'multi-value' || on.length > 1) return null;
+    return on[0].method === 'add' ? 'remove' : on[0].method === 'remove' ? 'add' : null;
+  }
+  #nextFreeField() {
+    const used = new Set(this.#state.ops.map(o => o.fieldKey));
+    return this.fields.find(x => !used.has(x.key))
+        ?? (this.#freeMethodOn(this.#field) ? this.#field : null)
+        ?? this.fields.find(x => this.#freeMethodOn(x))
+        ?? null;
+  }
+
+  #newRow(f) {
+    const m = methodsFor(f)[0];
+    return { fieldKey: f.key, method: m, operand: this.#defaultOperand(f, m), touched: false };
+  }
 
   #defaultOperand(field, method) {
     if (field.type === 'boolean') return null;
@@ -434,25 +603,10 @@ export class BulkEdit extends HTMLElement {
   }
 
   // The only place the interface is allowed to know anything.
-  // The operation being configured right now, or null while it is still incomplete.
-  // An operation with no value chosen is not an operation yet, and must not enter
-  // the batch — planBatch would reduce against a value the operator never set.
-  #currentOp() {
-    const field = this.#field, s = this.#state;
-    if (!field || this.#needsValue(field, s)) return null;
-    return { field, method: s.method, operand: s.operand };
-  }
-
-  // Every operation the batch is made of: the ones already added, plus the one
-  // being configured if it is complete.
-  #allOps() {
-    const cur = this.#currentOp();
-    return cur ? [...this.#state.ops, cur] : [...this.#state.ops];
-  }
-
   #compute() {
-    const field = this.#field, { method, operand, excluded } = this.#state;
-    const ops = this.#allOps();
+    const field = this.#field, cur = this.#cur, { excluded } = this.#state;
+    const { method, operand } = cur;
+    const ops = this.#state.ops.map(o => this.#opAt(o));
 
     // One operation is the case this component was built for, and it keeps the
     // path it already had — transition groups, and a plan() result the rest of
@@ -463,7 +617,9 @@ export class BulkEdit extends HTMLElement {
     // Gating on ops.length >= 2 was wrong: with one banked operation and an empty
     // picker, the preview and the apply button read the cleared picker and
     // offered to change every host.
-    if (this.#state.ops.length === 0) return { ...base, ops, batch: null, reduction: null };
+    // One operation keeps the transition-group surface — per-host exclusion, clamp
+    // marks, the whole reason this component exists. The list takes over at two.
+    if (ops.length < 2) return { ...base, ops, batch: null, reduction: null };
 
     // Two or more, and the operation list becomes the primary surface. The model
     // already answers this; nothing is counted here.
@@ -499,14 +655,32 @@ export class BulkEdit extends HTMLElement {
     const t = e.target, s = this.#state;
     if (t.id === 'field') {
       const f = this.fields.find(x => x.key === t.value);
-      s.fieldKey = f.key; s.method = methodsFor(f)[0]; s.operand = this.#defaultOperand(f, s.method);
+      const i = s.editing, cur = s.ops[i];
+      const existing = s.ops.findIndex((o, j) => j !== i && o.fieldKey === f.key);
+      if (existing !== -1) {
+        // That field already has an operation — edit it rather than shadowing it,
+        // and drop the row being left if it was never configured.
+        if (!cur.touched && s.ops.length > 1) {
+          s.ops = s.ops.filter((_, j) => j !== i);
+          s.editing = existing > i ? existing - 1 : existing;
+        } else s.editing = existing;
+      } else if (!cur.touched) {
+        Object.assign(cur, this.#newRow(f));
+      } else {
+        s.ops = [...s.ops, { ...this.#newRow(f), touched: true }];
+        s.editing = s.ops.length - 1;
+      }
       s.open.clear(); s.showAll.clear(); s.query = {}; s.seededFor = null;
+      s.openOps = new Set(); s.openSamples = new Set();
     } else if (t.id === 'method') {
-      s.method = t.value; s.operand = this.#defaultOperand(this.#field, t.value);
+      const cur = this.#cur;
+      cur.method = t.value; cur.operand = this.#defaultOperand(this.#field, t.value); cur.touched = true;
     } else if (t.id === 'operand') {
-      s.operand = this.#field.type === 'number' ? Number(t.value)
-                : this.#field.type === 'multi-value' ? (t.value ? [t.value] : [])
-                : t.value;
+      const cur = this.#cur, f = this.#field;
+      cur.operand = f.type === 'number' ? Number(t.value)
+                  : f.type === 'multi-value' ? (t.value ? [t.value] : [])
+                  : t.value;
+      cur.touched = true;
     } else if (t.dataset.scope !== undefined) {
       if (t.value === 'matching') {
         const ids = this.matching.map(i => i.id);
@@ -525,8 +699,9 @@ export class BulkEdit extends HTMLElement {
       else ids.forEach(id => this.selection.delete(id));
       s.seededFor = null;
     } else if (t.dataset.val !== undefined) {
-      const cur = Array.isArray(s.operand) ? [...s.operand] : [];
-      s.operand = t.checked ? [...cur, t.dataset.val] : cur.filter(v => v !== t.dataset.val);
+      const row = this.#cur, have = Array.isArray(row.operand) ? [...row.operand] : [];
+      row.operand = t.checked ? [...have, t.dataset.val] : have.filter(v => v !== t.dataset.val);
+      row.touched = true;
       s.seededFor = null;
     } else if (t.dataset.pick) {
       t.checked ? this.selection.add(t.dataset.pick) : this.selection.delete(t.dataset.pick);
@@ -571,6 +746,27 @@ export class BulkEdit extends HTMLElement {
     if (chip) { this.filter = chip.dataset.filter || null; this.pageNo = 0; return this.#render(); }
     const act = e.target.closest?.('[data-act]');
     if (act) return this.#act(act.dataset.act);
+    const sample = e.target.closest?.('[data-sample]');
+    if (sample) {
+      const k = sample.dataset.sample, open = this.#state.openSamples;
+      open.has(k) ? open.delete(k) : open.add(k);
+      return this.#render();
+    }
+    const exp = e.target.closest?.('[data-laneexp]');
+    if (exp) {
+      const k = Number(exp.dataset.laneexp), open = this.#state.openOps;
+      open.has(k) ? open.delete(k) : open.add(k);
+      return this.#render();
+    }
+    // Selecting a row is the only way to reach the second operation on a field —
+    // the field dropdown can only ever land on the first one that matches.
+    const lane = e.target.closest?.('[data-lane]');
+    if (lane) {
+      this.#state.editing = Number(lane.dataset.lane);
+      this.#state.open.clear(); this.#state.showAll.clear();
+      this.#state.query = {}; this.#state.seededFor = null;
+      return this.#render();
+    }
     const head = e.target.closest?.('.ghead'), more = e.target.closest?.('[data-showall]');
     if (more) { this.#state.showAll.add(more.dataset.showall); return this.#render(); }
     if (head) {
@@ -593,6 +789,195 @@ export class BulkEdit extends HTMLElement {
     return null;
   }
 
+  // Four transitions were declared in this stylesheet and none of them could ever
+  // run: every render replaces the whole shadow tree, so the caret that should
+  // rotate is a different element each time and starts at its final angle with
+  // nothing to animate from. Motion here therefore cannot be CSS. The state that
+  // should move is captured before the render and replayed onto the new nodes
+  // after it — the only reason it works is that the pieces carry stable keys.
+  #motionOn() {
+    return this.getAttribute('theme') === 'designed'
+      && !matchMedia('(prefers-reduced-motion: reduce)').matches
+      && typeof Element.prototype.animate === 'function';
+  }
+
+  #keepMotion() {
+    if (!this.#motionOn()) return null;
+    const sr = this.shadowRoot, carets = new Map();
+    // The distribution bar is NOT captured. It shows current state, which only
+    // moves on a filter change or a commit — and both replace the whole screen,
+    // so there is never a previous bar to move from. Animating it would have been
+    // one more declaration that cannot fire, which is the fault this file already
+    // has four of. The number that does change on every edit is the commitment.
+    const btn = sr.querySelector('.apply');
+    const applyCount = btn ? Number((btn.textContent.match(/[\d,]+/) || [''])[0].replace(/,/g, '')) : null;
+    for (const c of sr.querySelectorAll('.lcaret,.ghead')) {
+      const k = c.dataset.laneexp ?? c.dataset.key;
+      if (k != null) carets.set(String(k), c.getAttribute('aria-expanded') === 'true');
+    }
+    // Open panels are kept as clones, with their geometry, so a panel that closes
+    // can still be seen leaving. The real node will not survive the render.
+    const details = new Map();
+    for (const d of sr.querySelectorAll('.lane-detail:not(.ghost)')) {
+      const row = d.previousElementSibling, k = row?.querySelector('.lcaret')?.dataset.laneexp;
+      if (k == null) continue;
+      const cs = getComputedStyle(d);
+      details.set(String(k), { node: d.cloneNode(true), h: d.getBoundingClientRect().height,
+                               pt: cs.paddingTop, pb: cs.paddingBottom,
+                               op: row.querySelector('.lane-op')?.textContent ?? '' });
+    }
+    // The sentence and the shape of the list, so an added operation can be seen
+    // to leave the sentence and land in the list.
+    const laneCount = sr.querySelectorAll('.lane').length, hadLanes = !!sr.querySelector('.lanes');
+    const sentEl = sr.querySelector('.sentence');
+    const sentence = sentEl ? { node: sentEl.cloneNode(true) } : null;
+    return { applyCount, carets, details, hadDetail: new Set(details.keys()), laneCount, hadLanes, sentence };
+  }
+
+  #playMotion(snap) {
+    if (!snap) return;
+    // Timing comes from the same tokens the stylesheet draws with. --be-ease is an
+    // ease-out, which is what an arriving element wants; the hard-coded
+    // ease-in-out this replaced spent the first 40ms of a 180ms rotate barely
+    // moving, which read as a hitch.
+    const sr = this.shadowRoot, cs = getComputedStyle(this);
+    const ms = v => { const s = (cs.getPropertyValue(v) || '').trim(); const n = parseFloat(s);
+                      return Number.isFinite(n) ? Math.round(/ms$/.test(s) ? n : n * 1000) : null; };
+    const EASE = cs.getPropertyValue('--be-ease').trim() || 'cubic-bezier(.2,.7,.3,1)';
+    const D1 = ms('--be-dur-1') ?? 180, D2 = ms('--be-dur-2') ?? 280;
+    // One contained reveal for everything that grows in: the box is clipped for
+    // the run and its padding grows with its height, so it truly starts empty.
+    const grow = (el, dur) => {
+      const ecs = getComputedStyle(el);
+      const h = el.getBoundingClientRect().height, pt = ecs.paddingTop, pb = ecs.paddingBottom;
+      el.style.overflow = 'hidden';
+      const a = el.animate(
+        [{ height: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: 0 },
+         { height: `${h}px`, paddingTop: pt, paddingBottom: pb, opacity: 1 }],
+        { duration: dur, easing: EASE });
+      // The promise settles on finish or cancel, and settles even when the
+      // document is hidden — the finish *event* waits for a frame that a hidden
+      // tab never paints.
+      const clear = () => { el.style.overflow = ''; };
+      a.finished.then(clear, clear);
+      return a;
+    };
+
+    // 1. The count on the commit button travels to its new value rather than
+    //    being swapped for it. This is the story of the change: you moved the
+    //    value, and you can see how far the number moved with it. Deliberately
+    //    not the summary line — that is an aria-live region, and rolling it would
+    //    announce every intermediate number to a screen reader.
+    const btn = sr.querySelector('.apply');
+    if (btn && snap.applyCount != null) {
+      const m = btn.textContent.match(/[\d,]+/);
+      const to = m ? Number(m[0].replace(/,/g, '')) : null;
+      // Skip when either end is 1: the label is singular there, and rolling the
+      // digits alone would read "Apply to 47 host" for a quarter of a second.
+      if (to != null && to !== snap.applyCount && to !== 1 && snap.applyCount !== 1)
+        this.#rollCount(btn, snap.applyCount, to);
+    }
+
+    // 2. The chevron rotates instead of jumping. animate() reaches ::before, which
+    //    is the only way to touch it now that the element itself is new.
+    for (const c of sr.querySelectorAll('.lcaret,.ghead')) {
+      const k = c.dataset.laneexp ?? c.dataset.key;
+      const now = c.getAttribute('aria-expanded') === 'true';
+      const was = snap.carets.get(String(k));
+      if (was === undefined || was === now) continue;
+      const dot = c.querySelector('.caret');
+      if (!dot) continue;
+      dot.animate([{ transform: `rotate(${was ? 45 : -45}deg)` }, { transform: `rotate(${now ? 45 : -45}deg)` }],
+                  { duration: D1, easing: EASE, pseudoElement: '::before' });
+    }
+
+    // 3. A panel that just opened grows from nothing, so the rows below are seen
+    //    to move rather than found somewhere new.
+    for (const d of sr.querySelectorAll('.lane-detail:not(.ghost)')) {
+      const k = d.previousElementSibling?.querySelector('.lcaret')?.dataset.laneexp;
+      if (snap.hadDetail.has(k)) continue;
+      sr.querySelector(`.lane-detail.ghost[data-ghost="${k}"]`)?.remove();
+      grow(d, D2);
+    }
+
+    // 4. A panel that just closed shrinks to nothing rather than vanishing, so the
+    //    rows below are seen to move up. The real node is already gone — every
+    //    render replaces the tree — so a clone of it stands in, animates to zero,
+    //    and is removed. State never lies: it says closed; the ghost is only paint.
+    //    Exits run at D1, faster than the D2 entrance, and finish with the caret.
+    const openNow = new Set([...sr.querySelectorAll('.lane-detail:not(.ghost)')].map(d =>
+      d.previousElementSibling?.querySelector('.lcaret')?.dataset.laneexp));
+    for (const [k, g] of snap.details ?? []) {
+      if (openNow.has(k)) continue;
+      const lc = sr.querySelector(`.lcaret[data-laneexp="${k}"]`);
+      const row = lc?.closest('.lane-row');
+      // No ghost when the lane itself went away, when this index now holds a
+      // different operation, or when the panel is still meant to be open.
+      if (!row || lc.getAttribute('aria-expanded') !== 'false') continue;
+      if ((row.querySelector('.lane-op')?.textContent ?? '') !== g.op) continue;
+      sr.querySelector(`.lane-detail.ghost[data-ghost="${k}"]`)?.remove();
+      const ghost = g.node;
+      ghost.classList.add('ghost'); ghost.dataset.ghost = k;
+      ghost.setAttribute('aria-hidden', 'true'); ghost.setAttribute('inert', '');
+      ghost.style.pointerEvents = 'none'; ghost.style.overflow = 'hidden';
+      row.insertAdjacentElement('afterend', ghost);
+      const collapse = ghost.animate(
+        [{ height: `${g.h}px`, paddingTop: g.pt, paddingBottom: g.pb, opacity: 1 },
+         { height: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: 0 }],
+        { duration: D1, easing: EASE });
+      const gone = () => ghost.remove();
+      collapse.finished.then(gone, gone);
+    }
+
+    // 5. Adding an operation. The sentence just finished drops out of the way and
+    //    the fresh one eases in over it; below, the list gains a row that grows in
+    //    rather than appearing — or the whole list does, the first time — so the
+    //    operation that was being edited is seen to land there. Only on an add:
+    //    choosing an existing row to edit swaps the sentence instantly.
+    const lanesNow = sr.querySelectorAll('.lane').length;
+    if (snap.sentence && lanesNow > snap.laneCount) {
+      const row = sr.querySelector('.row'), sent = sr.querySelector('.sentence');
+      if (row && sent) {
+        const prevPos = row.style.position;
+        row.style.position = 'relative';                  // before reading offsets
+        const ghost = snap.sentence.node;
+        ghost.classList.add('ghost');
+        ghost.setAttribute('aria-hidden', 'true'); ghost.setAttribute('inert', '');
+        Object.assign(ghost.style, { position: 'absolute', left: `${sent.offsetLeft}px`, top: `${sent.offsetTop}px`,
+                                     width: `${sent.offsetWidth}px`, margin: '0', pointerEvents: 'none' });
+        row.appendChild(ghost);
+        const canMove = getComputedStyle(sent).display !== 'inline';
+        const out = ghost.animate(
+          canMove ? [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(6px)' }]
+                  : [{ opacity: 1 }, { opacity: 0 }],
+          { duration: D1, easing: EASE });
+        const done = () => { ghost.remove(); row.style.position = prevPos; };
+        out.finished.then(done, done);
+        sent.animate(
+          canMove ? [{ opacity: 0, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'translateY(0)' }]
+                  : [{ opacity: 0 }, { opacity: 1 }],
+          { duration: D1, delay: 60, easing: EASE, fill: 'backwards' });
+      }
+      const lanes = sr.querySelector('.lanes');
+      if (lanes && !snap.hadLanes) grow(lanes, D2);
+      else if (lanes) { const last = lanes.querySelector('.lane:last-child'); if (last) grow(last, D2); }
+    }
+  }
+
+  // Rewrites only the digits inside the label, so the surrounding words and the
+  // singular/plural the model chose are left exactly as rendered.
+  #rollCount(btn, from, to) {
+    const tpl = btn.textContent, D = 260, t0 = performance.now();
+    const paint = v => { btn.textContent = tpl.replace(/[\d,]+/, v.toLocaleString()); };
+    const step = now => {
+      const k = Math.min(1, (now - t0) / D);
+      const eased = 1 - Math.pow(1 - k, 3);
+      paint(Math.round(from + (to - from) * eased));
+      if (k < 1) requestAnimationFrame(step); else paint(to);
+    };
+    requestAnimationFrame(step);
+  }
+
   #restore(mark) {
     if (!mark) return;
     const el = this.shadowRoot.querySelector(mark.attr);
@@ -603,11 +988,13 @@ export class BulkEdit extends HTMLElement {
 
   #render(opts = {}) {
     const mark = this.#keep();
+    const motion = this.#keepMotion();
     if (this.#phase.name === 'browsing') { this.#renderPicker(opts); return this.#restore(mark); }
     const { field, p, groups, current, batch, reduction } = this.#compute();
     const s = this.#state;
+    const cur = this.#cur;
     const methods = methodsFor(field);
-    const destructive = DESTRUCTIVE.has(s.method);
+    const destructive = DESTRUCTIVE.has(cur.method);
 
     // Groups start open when the selection is small enough to just read. This is
     // seeded into the open set rather than inferred from it — inferring made the
@@ -621,7 +1008,7 @@ export class BulkEdit extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>${CSS}</style>
-      <div class="backlink"><a data-act="reselect">← Change selection</a> <kbd>Esc</kbd> · ${this.selection.size} of ${this.all.length} hosts</div>
+      <div class="backlink"><a data-act="reselect" aria-keyshortcuts="Escape" title="Escape">← Change selection</a> · ${this.selection.size} of ${this.all.length} hosts</div>
       <div class="bar">
         <div class="row">
           <span class="sentence">
@@ -629,33 +1016,50 @@ export class BulkEdit extends HTMLElement {
               `<option value="${f.key}" ${f.key === field.key ? 'selected' : ''}>${f.label ?? f.key}</option>`).join('')}</select>
             <span class="arrow" aria-hidden="true">→</span>
             <select id="method" aria-label="What to do">${methods.map(m =>
-              `<option value="${m}" ${m === s.method ? 'selected' : ''}>${METHOD_LABEL[m]}</option>`).join('')}</select>
-            ${this.#operandHTML(field, s.method, s.operand)}
+              `<option value="${m}" ${m === cur.method ? 'selected' : ''}>${METHOD_LABEL[m]}</option>`).join('')}</select>
+            ${this.#operandHTML(field, cur.method, cur.operand)}
           </span>
 
-          <button class="apply ${destructive ? 'destructive' : ''}" data-act="apply" ${(batch ? batch.counts.changing : p.counts.changing && !this.#needsValue(field, s)) ? '' : 'disabled'}>
+          <button class="apply ${destructive ? 'destructive' : ''}" data-act="apply" ${(batch ? batch.counts.changing : p.counts.changing && !this.#needsValue(field, cur)) ? '' : 'disabled'}>
             Apply to ${(batch ? batch.counts.changing : p.counts.changing).toLocaleString()} host${(batch ? batch.counts.changing : p.counts.changing) === 1 ? '' : 's'}
           </button>
         </div>
         <div class="context">${this.#distHTML(current, field)}</div>
-        <div class="summary" role="status" aria-live="polite">${batch ? this.#summaryHTML(batch) : this.#needsValue(field, s) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
-        ${destructive && p.counts.changing ? `<div class="warn">${METHOD_LABEL[s.method]} discards values that are not shown anywhere else.</div>` : ''}
-        <button class="addop" type="button" data-act="addop" ${this.#currentOp() ? '' : 'disabled'}
-          title="Bank this operation and configure another. The batch is reduced to the shortest list with the same outcome.">
-          + Add another operation
-        </button>
+        <div class="summary" role="status" aria-live="polite">${batch ? this.#summaryHTML(batch) : this.#needsValue(field, cur) ? 'No value chosen yet.' : this.#summaryHTML(p)}</div>
+        ${this.#editingHintHTML(batch)}
+        ${destructive && p.counts.changing ? `<div class="warn">${METHOD_LABEL[cur.method]} discards values that are not shown anywhere else.</div>` : ''}
+        ${this.#nextFreeField()
+          ? `<button class="addop" type="button" data-act="addop"
+               title="Start another operation. Existing ones stay until you remove them.">
+               + Add another operation
+             </button>`
+          : `<div class="pickhint">Every field already has an operation. Change a method above to do something else, or remove one.</div>`}
       </div>
 
       ${this.#phaseHTML(p)}
 
       ${batch ? this.#lanesHTML(batch, reduction) : `
       <div class="label">Transition groups</div>
-      ${this.#needsValue(field, s) ? '<div class="empty">Choose a value to see what would change.</div>'
+      ${this.#needsValue(field, cur) ? '<div class="empty">Choose a value to see what would change.</div>'
         : groups.length ? groups.map((g, i) => this.#groupHTML(g, field, i === 0, i === groups.length - 1)).join('')
         : '<div class="empty">Nothing selected.</div>'}`}
     `;
 
     this.#restore(mark);
+    this.#playMotion(motion);
+  }
+
+  // With more than one operation the dropdowns are editing one row of a list, and
+  // which row that is has to be said out loud — the highlight in the list alone
+  // leaves it ambiguous which direction the editing runs.
+  #editingHintHTML(batch) {
+    if (!batch) return '';
+    const s = this.#state;
+    // Only promise the shortcut while it exists — at full coverage the line below
+    // the button already says there is nothing left to add, and two hints that
+    // disagree is the same fault this component is about.
+    const more = this.#nextFreeField() ? ' Pick a field with no operation yet to start another.' : '';
+    return `<div class="pickhint">Editing operation ${s.editing + 1} of ${s.ops.length}.${more}</div>`;
   }
 
   #needsValue(field, s) {
@@ -792,21 +1196,30 @@ export class BulkEdit extends HTMLElement {
     if (name === 'edit')   { this.#phase = { name: 'editing' }; this.#state.seededFor = null; return this.#render(); }
     if (name === 'reselect') { this.#phase = { name: 'browsing' }; return this.#render(); }
 
-    // Adding an operation banks the one being configured and clears the value,
-    // so the picker is immediately ready for the next one. The field and method
-    // stay put: the common case is a second operation on the same field, which
-    // is exactly the case the reduction exists to explain.
+    // Rows are never implicitly discarded. Several operations on one field are a
+    // real case, not an accident — Add one tag and Remove another are both
+    // load-bearing, and Decrease by 7 twice compounds. So this does not cap rows
+    // per field; it only refuses to mint a row identical to one already there,
+    // which is what produced three struck-through copies of the same operation.
     if (name === 'addop') {
-      const cur = this.#currentOp();
-      if (!cur) return;
-      this.#state.ops = [...this.#state.ops, cur];
-      this.#state.operand = this.#defaultOperand(cur.field, cur.method);
-      if (!this.#needsValue(cur.field, this.#state)) this.#state.operand = Array.isArray(this.#state.operand) ? [] : '';
+      const s = this.#state;
+      const f = this.#nextFreeField();
+      if (!f) return;                       // the button is not rendered in this state
+      const m = this.#freeMethodOn(f) ?? methodsFor(f)[0];
+      s.ops = [...s.ops, { ...this.#newRow(f), method: m, operand: this.#defaultOperand(f, m), touched: true }];
+      s.editing = s.ops.length - 1;
+      s.open.clear(); s.showAll.clear(); s.query = {}; s.seededFor = null;
+      s.openOps = new Set(); s.openSamples = new Set();
       return this.#render();
     }
     if (name.startsWith('rmop:')) {
-      const i = Number(name.slice(5));
-      this.#state.ops = this.#state.ops.filter((_, j) => j !== i);
+      const i = Number(name.slice(5)), s = this.#state;
+      if (s.ops.length <= 1) return;          // the picker always needs a row to edit
+      s.ops = s.ops.filter((_, j) => j !== i);
+      s.editing = Math.min(s.editing > i ? s.editing - 1 : s.editing, s.ops.length - 1);
+      // both are keyed by position, and every position after i has just shifted
+      s.openOps = new Set(); s.openSamples = new Set();
+      s.seededFor = null;
       return this.#render();
     }
 
@@ -814,7 +1227,7 @@ export class BulkEdit extends HTMLElement {
     if (name === 'apply') {
       // clear is the one operation that leaves nothing behind, so it is the one
       // that earns a gate. Everything else is guarded by the diff you just read.
-      if (this.#state.method === 'clear') { this.#phase = { name: 'confirming', typed: '' }; return this.#render(); }
+      if (this.#cur.method === 'clear') { this.#phase = { name: 'confirming', typed: '' }; return this.#render(); }
       return this.#commit(p);
     }
     if (name === 'confirm') return this.#commit(p);
@@ -877,7 +1290,7 @@ export class BulkEdit extends HTMLElement {
       const r = ph.result, bad = !r.complete;
       return `<div class="result ${bad ? 'bad' : ''}">
         <h3>${describeResult(r)}</h3>
-        ${bad ? `<p style="margin:0;font-size:var(--be-t-lg);color:#444">The ${r.counts.succeeded} that succeeded are done and will not be touched again. A retry applies only to the ${r.counts.failed} below.</p>
+        ${bad ? `<p style="margin:0;font-size:var(--be-t-lg);color:var(--be-body)">The ${r.counts.succeeded} that succeeded are done and will not be touched again. A retry applies only to the ${r.counts.failed} below.</p>
           <table class="fails">${r.failed.slice(0, 5).map(x =>
             `<tr><td>${x.item.hostname}</td><td class="before">${fmt(x.before)} → ${fmt(x.after)}</td><td class="why">timed out</td></tr>`).join('')}
             ${r.counts.failed > 5 ? `<tr><td colspan="3" style="color:var(--be-faint)">… and ${r.counts.failed - 5} more</td></tr>` : ''}</table>` : ''}
@@ -909,7 +1322,7 @@ export class BulkEdit extends HTMLElement {
     // What matters before the operation is how many already hold the value you
     // are about to apply.
     if (field.type === 'multi-value') {
-      const ops = Array.isArray(this.#state.operand) ? this.#state.operand : [];
+      const ops = Array.isArray(this.#cur.operand) ? this.#cur.operand : [];
       if (!ops.length) return '';
       const pres = current.presence ?? [];
       // one bar per value, because each is its own 0–100% question and they do
@@ -919,8 +1332,8 @@ export class BulkEdit extends HTMLElement {
         ${ops.map((v, i) => {
           const have = pres.find(x => x.value === v)?.count ?? 0;
           return `<span class="mini">
-            <span class="track"><span class="seg" style="flex:${have};background:${paletteFor(field)[i % 6]}"></span
-              ><span class="seg rest" style="flex:${total - have}"></span></span>
+            <span class="track"><span class="seg" data-k="m:${v}" style="flex:${have};background:${paletteFor(field)[i % 6]}"></span
+              ><span class="seg rest" data-k="m:${v}:rest" style="flex:${total - have}"></span></span>
             <span class="mlab"><b>${have.toLocaleString()}</b> of ${total.toLocaleString()} have ${v}</span>
           </span>`;
         }).join('')}
@@ -946,7 +1359,7 @@ export class BulkEdit extends HTMLElement {
     return `<div class="dist">
       <div class="cap">Currently</div>
       <div class="track">${shown.map((v, i) =>
-        `<span class="seg" style="flex:${v.count};background:${colour(v, i)}" title="${fmt(v.value)} ${v.count}"></span>`).join('')}</div>
+        `<span class="seg" data-k="${fmt(v.value)}" style="flex:${v.count};background:${colour(v, i)}" title="${fmt(v.value)} ${v.count}"></span>`).join('')}</div>
       <div class="keys">${shown.map((v, i) =>
         `<span title="${lbl(v)} — ${v.count.toLocaleString()} of ${total.toLocaleString()} (${Math.round(v.count / total * 100)}%)"
           ><i style="background:${colour(v, i)}"></i>${lbl(v)} <b>${v.count.toLocaleString()}</b></span>`).join('')}</div>
@@ -983,7 +1396,14 @@ export class BulkEdit extends HTMLElement {
     }
 
     const val = Array.isArray(operand) ? operand[0] ?? '' : operand ?? '';
+
+    // A select with no option selected still *displays* its first option, so an
+    // empty state read as a configured one: after banking an operation the state
+    // held '' while the control said "prod". That is the field and its value
+    // disagreeing about what is true — the exact fault this component exists to
+    // prevent. The placeholder makes "no value yet" something the control can say.
     return `<span class="arrow" aria-hidden="true">→</span><select id="operand" aria-label="Value">
+      ${val === '' ? '<option value="" selected>Choose a value…</option>' : ''}
       ${opts.map(o => `<option value="${o}" ${String(o) === String(val) ? 'selected' : ''}>${o}</option>`).join('')}
     </select>`;
   }
@@ -996,6 +1416,55 @@ export class BulkEdit extends HTMLElement {
   //
   // Every number and every sentence here comes from planBatch()/describeBatch().
   // Nothing on this surface decides whether an operation is redundant.
+  // An operation in a sequence cannot be previewed in isolation — by the time
+  // step 3 runs, steps 1 and 2 have already moved rows. planBatch() runs the
+  // pipeline and keeps a per-row trail, so steps[i] is what this operation
+  // actually did at its own position. Recomputing it from the original values
+  // would be the faster lie.
+  #laneDetailHTML(batch, i) {
+    const o = batch.ops[i];
+    const rows = batch.rows.filter(r => !r.excluded && r.steps[i]);
+    const buckets = new Map();
+    for (const r of rows) {
+      const st = r.steps[i];
+      const key = st.moved ? `m\u0000${fmt(st.before)}\u0000${fmt(st.after)}` : 'same';
+      if (!buckets.has(key)) buckets.set(key, { moved: st.moved, before: st.before, after: st.after, rows: [] });
+      buckets.get(key).rows.push(r);
+    }
+    const undoneBy = (o.supersededBy ?? [])
+      .map(j => `${j + 1} ${phraseOp(batch.ops[j])}`).join(' and ');
+
+    const order = [...buckets.values()].sort((a, b) => (b.moved - a.moved) || (b.rows.length - a.rows.length));
+    // Deliberately not a third level of disclosure. The single-operation groups
+    // expand to host rows carrying exclusion checkboxes, and those cannot come
+    // here: `excluded` is one batch-wide set, so unticking a host inside
+    // operation 1 would drop it from every operation while appearing not to.
+    // What is safe to bring across is reading the names, so the "+67 more" that
+    // already looked like an affordance becomes one, expanding in place.
+    const line = (b, bi) => {
+      const key = `${i}:${bi}`;
+      const open = this.#state.openSamples.has(key);
+      const all = b.rows.map(r => r.item.hostname ?? r.id);
+      const shown = (open ? all : all.slice(0, 3)).join(', ');
+      const toggle = all.length > 3
+        ? ` <button class="ld-more" type="button" data-sample="${key}"
+             aria-expanded="${open}">${open ? 'show fewer' : `+${(all.length - 3).toLocaleString()} more`}</button>`
+        : '';
+      return `<div class="ld-row${b.moved ? '' : ' quiet'}">
+        <span class="ld-t">${b.moved
+          ? `${fmt(b.before)} <span class="ld-arrow" aria-hidden="true">&rarr;</span> ${fmt(b.after)}`
+          : 'already match'}</span>
+        <span class="ld-n">${b.rows.length.toLocaleString()}</span>
+        <span class="ld-s-wrap${open ? ' open' : ''}"><span class="ld-s">${shown}</span>${toggle}</span>
+        ${b.moved && o.dead && undoneBy ? `<span class="ld-undo">undone by ${undoneBy}</span>` : ''}
+      </div>`;
+    };
+    return `<div class="lane-detail">
+      <div class="ld-head">At step ${i + 1}${i > 0 ? ', after the operations above it' : ''}</div>
+      ${order.map((b, bi) => line(b, bi)).join('')}
+    </div>`;
+  }
+
   #lanesHTML(batch, reduction) {
     const noteFor = i => (reduction?.notes ?? []).find(n => n.index === i);
 
@@ -1007,15 +1476,30 @@ export class BulkEdit extends HTMLElement {
       const live = o.alreadyMatched
         ? `${moved.toLocaleString()} change &middot; ${o.alreadyMatched.toLocaleString()} already match`
         : `${moved.toLocaleString()} change`;
+      // Each count is what the operation does at its own position, not its net
+      // contribution: step 3 can move 200 rows because step 2 turned 61 of them on,
+      // while the batch as a whole changes 199. That framing used to sit on every
+      // row as "at step 3" — restating the number already printed at its left. It
+      // is said once now, over the list.
+      const open = this.#state.openOps.has(o.index);
       return `
-        <div class="lane ${o.dead ? 'dead' : ''}">
-          <span class="lane-n">${o.index + 1}</span>
-          <span class="lane-body">
-            <span class="lane-op">${phraseOp(o)}</span>
-            <span class="lane-note">${note ? note.text.replace(/^.*? changes nothing &mdash; /, 'Changes nothing — ').replace(/^.*?changes nothing — /, 'Changes nothing — ') : live}</span>
-          </span>
-          <button class="lane-x" type="button" data-act="rmop:${o.index}"
-                  aria-label="Remove operation ${o.index + 1}: ${phraseOp(o)}">&times;</button>
+        <div class="lane ${o.dead ? 'dead' : ''} ${o.index === this.#state.editing ? 'editing' : ''}">
+          <div class="lane-row">
+            <button class="lcaret" type="button" data-laneexp="${o.index}" aria-expanded="${open}"
+                    aria-label="${open ? 'Hide' : 'Show'} what operation ${o.index + 1} does"><span class="caret" aria-hidden="true"></span></button>
+            <button class="lhead" type="button" data-lane="${o.index}"
+                    aria-pressed="${o.index === this.#state.editing}"
+                    aria-label="Edit operation ${o.index + 1}">
+              <span class="lane-n">${o.index + 1}</span>
+              <span class="lane-body">
+                <span class="lane-op">${phraseOp(o)}</span>${o.index === this.#state.editing ? '<span class="lane-edit">editing</span>' : ''}
+                <span class="lane-note">${note ? note.text.replace(/^.*?changes nothing (&mdash;|—) /, 'Changes nothing — ') : live}</span>
+              </span>
+            </button>
+            <button class="lane-x" type="button" data-act="rmop:${o.index}"
+                    aria-label="Remove operation ${o.index + 1}: ${phraseOp(o)}">&times;</button>
+          </div>
+          ${open ? this.#laneDetailHTML(batch, o.index) : ''}
         </div>`;
     }).join('');
 
@@ -1026,7 +1510,7 @@ export class BulkEdit extends HTMLElement {
       : '';
 
     return `
-      <div class="label">Operations &middot; ${batch.ops.length}</div>
+      <div class="label">Operations &middot; ${batch.ops.length}<span class="label-note">counts are per step, in order</span></div>
       <div class="lanes">${lanes}</div>
       ${equiv}`;
   }
