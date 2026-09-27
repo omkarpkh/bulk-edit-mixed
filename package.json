@@ -5,6 +5,7 @@
   "private": true,
   "description": "Bulk editing for values that differ. A study in being honest about what will change.",
   "scripts": {
-    "test": "node --test spec/model.test.js"
+    "test": "node --test spec/*.test.js",
+    "figures": "node scripts/figures.mjs"
   }
 }

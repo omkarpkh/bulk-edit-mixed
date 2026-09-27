@@ -1,0 +1,34 @@
+{
+  "quotedBy": "https://omkarux.com/bulk-edit/model/",
+  "example": {
+    "dataset": "demo/hosts.json",
+    "hosts": 24,
+    "call": "plan(hosts, tags, 'add', 'monitored')",
+    "willChange": 22,
+    "alreadyMatch": 2,
+    "reads": "22 will change · 2 already match"
+  },
+  "grouping": {
+    "dataset": "demo/fixture.js",
+    "hosts": 200,
+    "call": "groupByTransition(plan(hosts, environment, 'set', 'prod'), environment, 'set', 'prod')",
+    "groups": [
+      {
+        "label": "staging → prod",
+        "hosts": 123
+      },
+      {
+        "label": "dev → prod",
+        "hosts": 70
+      },
+      {
+        "label": "already prod",
+        "hosts": 7
+      }
+    ]
+  },
+  "tests": {
+    "file": "spec/model.test.js",
+    "count": 53
+  }
+}

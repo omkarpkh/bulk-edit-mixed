@@ -80,6 +80,12 @@ non-destructive place for it, it scores 1 rather than 0.
 
 ## Verdict
 
+> **Corrected 27 Sep 2026.** Direction 1's C3 (scale) should be 2, not 3: its layout
+> survives 200 rows, but its review does not. Applied, direction 1 scores 78 of 117
+> and ties direction 3, so there is no winner. The verdict below is the original, kept
+> as written; the interface was built from it before the correction. See
+> [omkarux.com/bulk-edit/scoring/](https://omkarux.com/bulk-edit/scoring/).
+
 **Winner: direction 1, the inline command bar — 80/117.**
 
 It wins on the two criteria that separate a real tool from a mockup:

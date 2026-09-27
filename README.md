@@ -30,15 +30,21 @@ completely fine. The model makes that frame impossible to draw.
 ## What is here
 
 ```
-src/model.js        the rules — pure functions, no interface
-spec/fields.json    field type → legal operations
-spec/model.test.js  25 tests, covering what products usually get wrong
-demo/hosts.json     24 hosts, 17 distinct tag sets, deterministic
-design/             the rubric, the scoring, and the working notes behind the direction
+src/model.js                    the rules — pure functions, no interface
+src/bulk-edit.js                the interface, a web component built on the model
+spec/fields.json                field type → legal operations
+spec/model.test.js              53 tests, covering what products usually get wrong
+spec/published-figures.test.js  fails when a number the write-up quotes stops matching the model
+demo/hosts.json                 24 hosts, 17 distinct tag sets, deterministic
+demo/fixture.js                 the demo's seeded hosts, as many as you ask for
+demo/figures.json               every number the write-up quotes, written by npm run figures
+demo/index.html                 the component, running on the fixture
+design/                         the rubric, the scoring, and the working notes behind the direction
 ```
 
 ```bash
-npm test
+npm test          # the model's tests, and the check on the published figures
+npm run figures   # rewrite demo/figures.json after changing the model, the data or the tests
 ```
 
 ## The four ideas the model encodes
@@ -67,16 +73,17 @@ item already at the field minimum does not change at all. The operation succeeds
 and does nothing, and the interface has to say so.
 
 **4 · A per-row diff stops being reviewable long before a selection stops being
-editable.** Six screens of scrolling is not verification. So `groupByTransition()`
+editable.** A long scroll is not verification. So `groupByTransition()`
 collapses a plan into classes of change:
 
 ```
-staging → prod    180 hosts
-dev     → prod     15 hosts
-already prod        5 hosts · no change
+staging → prod    123 hosts
+dev     → prod     70 hosts
+already prod        7 hosts · no change
 ```
 
-This holds at any size, because the number of distinct transitions is bounded by
+That is the demo's 200 hosts with Environment set to prod, as `npm run figures`
+computes it. It holds at any size, because the number of distinct transitions is bounded by
 the field's value space rather than by the selection. Relative numeric operations
 are the exception — every item moves from its own value — so those group by
 *outcome class* instead: moved, clamped at a limit, already there. Which is also
@@ -84,14 +91,17 @@ the only way clamping stays visible at scale rather than buried in row 147.
 
 ## Status
 
-The model is built and tested. The interface is not. The direction is settled —
-an inline command bar with a distribution readout, grouped diffs, and per-row
-exclusion — chosen through a scored evaluation documented in `design/` and in the
-write-up.
+The model is built and tested, and the interface built on it runs in `demo/` and
+on the write-up. It is in no product, and no operator has used it.
 
-This is deliberately published before the interface exists, because the claim
-being made is that the model *is* the design. That is either checkable or it is
-just a sentence.
+The scoring did not settle the direction. Corrected, it is a tie between
+directions 1 and 3 (see the note in `design/concept-scoring.md`). The interface
+started from direction 1 — an inline command bar with a distribution readout,
+grouped diffs, and per-row exclusion — before that correction was applied.
+
+The model went into this repo before the interface did, because the claim being
+made is that the model *is* the design. That is either checkable or it is just a
+sentence.
 
 ## Licence
 
