@@ -1159,7 +1159,7 @@ export class BulkEdit extends HTMLElement {
         <b>${r.total.toLocaleString()}</b> host${r.total === 1 ? '' : 's'} selected
         <span class="scope-ctl">
           <span class="scope-lbl">Scope</span>
-          <select data-scope>
+          <select data-scope aria-label="Scope">
             <option value="page" ${r.mode !== 'matching' ? 'selected' : ''}>This page (${page.toLocaleString()})</option>
             <option value="matching" ${r.mode === 'matching' ? 'selected' : ''} ${overLimit ? 'disabled' : ''}>
               ${overLimit
